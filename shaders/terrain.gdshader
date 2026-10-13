@@ -8,6 +8,7 @@ uniform vec3 dirt_color : source_color = vec3(0.33, 0.24, 0.16);
 uniform vec3 rock_light : source_color = vec3(0.47, 0.44, 0.40);
 uniform vec3 rock_dark : source_color = vec3(0.26, 0.24, 0.22);
 uniform vec3 sand_color : source_color = vec3(0.86, 0.80, 0.64);
+uniform vec3 mud_color : source_color = vec3(0.24, 0.21, 0.16);  // Lake and river beds
 uniform vec3 snow_color : source_color = vec3(0.93, 0.95, 0.98);
 
 // Set from world_generator.gd
@@ -23,6 +24,7 @@ uniform float detail_strength = 0.6;
 varying vec3 world_pos;
 varying vec3 world_normal;
 varying vec2 erosion; // x = drainage flow, y = sediment deposit
+varying float inland; // 1 under a lake or river
 
 float hash(vec2 p) {
 	vec3 p3 = fract(vec3(p.xyx) * 0.1031);
@@ -54,6 +56,7 @@ void vertex() {
 	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	world_normal = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 	erosion = COLOR.rg;
+	inland = COLOR.b;
 }
 
 void fragment() {
@@ -99,6 +102,10 @@ void fragment() {
 	float beach_t = (1.0 - smoothstep(beach_top - 0.6, beach_top + 0.3, h)) * (1.0 - rock_t);
 	col = mix(col, sand_color * (0.85 + 0.3 * fine), beach_t);
 
+	// --- Lake and river beds: dark silt with pebbly patches
+	vec3 bed = mix(mud_color, rock_dark * 1.2, smoothstep(0.55, 0.8, fine + mid * 0.3)) * (0.85 + 0.3 * fine);
+	col = mix(col, bed, smoothstep(0.1, 0.6, inland));
+
 	// --- Snow on high, not-too-steep ground with a ragged snow line
 	float snow_line = max_height * snow_height_fraction + (macro - 0.5) * max_height * 0.25;
 	float snow_t = smoothstep(snow_line, snow_line + 4.0, h + (fine - 0.5) * 6.0);
@@ -106,7 +113,7 @@ void fragment() {
 	col = mix(col, snow_color, snow_t);
 
 	// --- Wetness: darken and gloss drainage channels and the waterline
-	float wet = clamp(smoothstep(0.55, 0.9, flow) + (1.0 - smoothstep(water_level, water_level + 0.6, h)), 0.0, 1.0);
+	float wet = clamp(smoothstep(0.55, 0.9, flow) + (1.0 - smoothstep(water_level, water_level + 0.6, h)) + inland, 0.0, 1.0);
 	wet *= 1.0 - snow_t;
 	col *= mix(1.0, 0.65, wet);
 

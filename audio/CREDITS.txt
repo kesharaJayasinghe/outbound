@@ -33,3 +33,8 @@ footsteps/sand_l1-6.wav, footsteps/sand_r1-6.wav
   "Water Splash and sand footsteps" by Peludo (sand_footsteps.mp3, recorded on a beach)
   https://opengameart.org/content/water-splash-and-sand-footsteps
   Sliced into 12 single steps (first step dropped), short fade-outs, loudness-normalised.
+
+river_babble.wav, river_rush.wav
+  "40 CC0 water / splash / slime SFX" by rubberduck (loop_water_01, loop_water_02)
+  https://opengameart.org/content/40-cc0-water-splash-slime-sfx
+  Converted to mono WAV and loudness-normalised (already seamless loops).

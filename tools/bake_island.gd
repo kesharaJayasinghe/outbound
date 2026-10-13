@@ -2,7 +2,8 @@ extends SceneTree
 
 ## Bakes a procedurally generated island to editable files under world/:
 ##   <name>_height.exr  32-bit float heightmap (edit in Krita etc.)
-##   <name>_masks.exr   flow / deposit / reserved water masks (float RGB)
+##   <name>_masks.exr   flow / deposit / lake+river masks (float RGB)
+##   <name>_water.exr   water surface height (sea level, or lake / river level inland)
 ##   <name>.tres        IslandData resource tying them together (assign to the
 ##                      generator's `baked_island`)
 ## Uses the generation settings on scenes/world_generator.tscn. Imports the new files
@@ -55,26 +56,29 @@ func _initialize() -> void:
 	for i in size * size:
 		mask[i * 3] = gen.flow_map[i]
 		mask[i * 3 + 1] = gen.deposit_map[i]
-		mask[i * 3 + 2] = 0.0  # Reserved: rivers / lakes
+		mask[i * 3 + 2] = gen.inland_mask[i]
 	Image.create_from_data(size, size, false, Image.FORMAT_RGBF, mask.to_byte_array()).save_exr(base + "_masks.exr")
+	Image.create_from_data(size, size, false, Image.FORMAT_RF, gen.water_height.to_byte_array()).save_exr(base + "_water.exr", true)
 
 	# Written as text so it can reference the images before they've been imported
-	var tres := """[gd_resource type="Resource" load_steps=4 format=3]
+	var tres := """[gd_resource type="Resource" load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/world/island_data.gd" id="1_data"]
 [ext_resource type="Texture2D" path="%s_height.exr" id="2_height"]
 [ext_resource type="Texture2D" path="%s_masks.exr" id="3_masks"]
+[ext_resource type="Texture2D" path="%s_water.exr" id="4_water"]
 
 [resource]
 script = ExtResource("1_data")
 heightmap = ExtResource("2_height")
 masks = ExtResource("3_masks")
+water = ExtResource("4_water")
 cell_size = %s
 max_height = %s
 water_level = %s
 terrain_seed = %d
 rng_state = %d
-""" % [base, base, var_to_str(gen.cell_size), var_to_str(gen.max_height), var_to_str(gen.water_level), gen.terrain_seed, gen.rng.state]
+""" % [base, base, base, var_to_str(gen.cell_size), var_to_str(gen.max_height), var_to_str(gen.water_level), gen.terrain_seed, gen.rng.state]
 	FileAccess.open(base + ".tres", FileAccess.WRITE).store_string(tres)
 	var baked_seed: int = gen.terrain_seed
 	gen.free()
@@ -82,6 +86,7 @@ rng_state = %d
 	_import()
 	_keep_lossless(base + "_height.exr")
 	_keep_lossless(base + "_masks.exr")
+	_keep_lossless(base + "_water.exr")
 	_import()
 	print("Baked seed %d (%dx%d) to %s.tres" % [baked_seed, size, size, base])
 	quit()

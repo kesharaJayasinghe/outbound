@@ -67,6 +67,17 @@ func _slope(i: int) -> float:
 	return 1.0 - gen.normal_map[i].y
 
 
+## True in or right beside a lake or river: water covers the spot, or the ground is
+## less than `clearance` metres above the local water surface.
+func _in_inland_water(x: float, z: float, h: float, clearance: float) -> bool:
+	if not gen.has_method("inland_water_at"):
+		return false
+	if gen.inland_water_at(x, z) > 0.0:
+		return true
+	var surface: float = gen.water_surface_at(x, z)
+	return surface > water_m + 0.05 and h < surface + clearance
+
+
 func _near_spawn(x: float, z: float) -> bool:
 	return Vector2(x, z).distance_to(spawn) < SPAWN_CLEARANCE
 
@@ -167,7 +178,7 @@ func _scatter_trees() -> void:
 		var h: float = gen.get_height(x, z)
 		var above := h - water_m
 		var slope := _slope(i)
-		if above < 1.0 or slope > 0.35:
+		if above < 1.0 or slope > 0.35 or _in_inland_water(x, z, h, 0.8):
 			return
 		var forest := forest_noise.get_noise_2d(x, z) * 0.5 + 0.5
 		var flat := 1.0 - smoothstep(0.18, 0.35, slope)
@@ -210,7 +221,8 @@ func _scatter_bushes() -> void:
 	_jittered_grid(3.5 / sqrt(gen.bush_density), func(x: float, z: float) -> void:
 		var i: int = gen.grid_index(x, z)
 		var h: float = gen.get_height(x, z)
-		if h - water_m < gen.beach_height + 0.4 or _slope(i) > 0.3 or h / gen.max_height > 0.7:
+		if h - water_m < gen.beach_height + 0.4 or _slope(i) > 0.3 or h / gen.max_height > 0.7 \
+				or _in_inland_water(x, z, h, 0.4):
 			return
 		var forest := forest_noise.get_noise_2d(x, z) * 0.5 + 0.5
 		var p: float = 0.04 + smoothstep(0.4, 0.7, forest) * 0.45 + gen.flow_map[i] * 0.1
@@ -282,6 +294,8 @@ func _build_grass() -> void:
 		m *= 1.0 - smoothstep(0.14, 0.24, _slope(i))
 		m *= 1.0 - smoothstep(0.75, 0.95, gen.deposit_map[i])
 		m *= 1.0 - smoothstep(0.7, 0.8, h)
+		# No grass under lakes and rivers or on the waterline
+		m *= (1.0 - gen.inland_mask[i]) * smoothstep(0.0, 0.5 / gen.max_height, h - gen.water_height[i])
 		mask[i] = int(clampf(m, 0.0, 1.0) * 255.0)
 	var mask_tex := ImageTexture.create_from_image(Image.create_from_data(gen.size, gen.size, false, Image.FORMAT_R8, mask))
 	var height_tex := ImageTexture.create_from_image(

@@ -9,12 +9,16 @@ extends Resource
 ##            (deep seabed). Water level is at `water_level`.
 ## masks      RGB float EXR (0..1), one pixel per vertex:
 ##              R = drainage flow (gullies, wet ground), G = sediment deposits,
-##              B = reserved for rivers and lakes (currently unused, keep 0)
+##              B = lake / river coverage (1 = under inland water)
 ##            Stored as float rather than 8-bit so a bake reproduces the generated
 ##            island exactly (vegetation placement depends on these values).
+## water      32-bit float EXR, the water surface height per vertex in the same units
+##            as the heightmap: sea level everywhere except over lakes and rivers.
+##            Optional; bakes without it have only the sea.
 
 @export var heightmap: Texture2D
 @export var masks: Texture2D
+@export var water: Texture2D
 @export var cell_size := 2.0
 @export var max_height := 90.0
 @export var water_level := 0.08

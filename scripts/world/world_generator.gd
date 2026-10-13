@@ -1,12 +1,15 @@
 extends Node3D
 
 ## Procedural terrain generator.
-## Pipeline: layered noise heightmap -> hydraulic erosion -> mesh (analytic normals)
-## + heightmap collision + water plane. Erosion data (drainage / sediment) is passed
-## to the terrain shader through vertex colours so gullies and deposits can be shaded.
+## Pipeline: layered noise heightmap -> hydraulic erosion -> beaches and seabed ->
+## lake and river (water_carver.gd) -> mesh (analytic normals) + heightmap collision +
+## sea plane + inland-water mesh. Erosion data (drainage / sediment) and the inland-water
+## mask are passed to the terrain shader through vertex colours.
 
 const TERRAIN_SHADER = preload("res://shaders/terrain.gdshader")
 const WATER_SHADER = preload("res://shaders/water.gdshader")
+const INLAND_WATER_SHADER = preload("res://shaders/inland_water.gdshader")
+const WATER_CARVER = preload("res://scripts/world/water_carver.gd")
 const VEGETATION = preload("res://scripts/world/vegetation.gd")
 const AMBIENT_AUDIO = preload("res://scripts/world/ambient_audio.gd")
 
@@ -31,6 +34,13 @@ const AMBIENT_AUDIO = preload("res://scripts/world/ambient_audio.gd")
 @export_range(0.0, 1.0) var water_level: float = 0.08  ## Fraction of max_height
 @export_range(0.0, 0.95) var beach_flatness: float = 0.75  ## Flattens the coast into wide beaches (0 = off)
 @export var beach_height: float = 2.4      ## Metres above the water that sand reaches
+
+@export_group("Lake and River")
+@export var lake_and_river: bool = true    ## Carve a hillside lake with a river running to the sea
+@export var lake_radius: float = 24.0      ## Metres (the shoreline is irregular around this)
+@export var lake_depth: float = 4.0        ## Metres at the centre
+@export var river_width: float = 7.0       ## Metres near the lake; widens downstream
+@export var river_depth: float = 1.1       ## Metres at the centre near the lake; deepens downstream
 
 @export_group("Vegetation")
 @export var vegetation_enabled: bool = true
@@ -57,6 +67,9 @@ var flow_map := PackedFloat32Array()  # Accumulated water passing through each v
 var deposit_map := PackedFloat32Array()
 var normal_map := PackedVector3Array() # Per-vertex terrain normal
 var island_edge := PackedFloat32Array() # Per-vertex distance through the island falloff (island mode)
+var water_height := PackedFloat32Array() # Water surface per vertex (normalised): sea level, or lake/river level inland
+var inland_mask := PackedFloat32Array()  # 1 where a lake or river covers the vertex
+var inland_flow := PackedVector2Array()  # Smoothed downstream direction x speed (0..1) per vertex
 var size := 0                          # Vertices per side
 var rng := RandomNumberGenerator.new()
 
@@ -67,9 +80,11 @@ func _ready() -> void:
 		_load_baked(baked_island)
 	else:
 		generate()
+	_compute_inland_flow()
 	_build_terrain()
 	if water_enabled:
 		_build_water()
+		_build_inland_water()
 	_place_player()
 	print("Terrain %s in %d ms" % ["loaded" if baked_island else "generated", Time.get_ticks_msec() - t])
 	var vegetation: Node3D = null
@@ -101,6 +116,13 @@ func generate() -> void:
 		_shape_beaches()
 	if island:
 		_sink_seabed()
+	water_height.resize(size * size)
+	water_height.fill(water_level)
+	inland_mask.resize(size * size)
+	inland_mask.fill(0.0)
+	if water_enabled and lake_and_river:
+		var result: String = WATER_CARVER.carve(self)
+		print("Carved " + result if result != "" else "No suitable lake site found")
 
 
 func _load_baked(data: Resource) -> void:
@@ -126,9 +148,21 @@ func _load_baked(data: Resource) -> void:
 	var rgb := m.get_data().to_float32_array()
 	flow_map.resize(size * size)
 	deposit_map.resize(size * size)
+	inland_mask.resize(size * size)
 	for i in size * size:
 		flow_map[i] = rgb[i * 3]
 		deposit_map[i] = rgb[i * 3 + 1]
+		inland_mask[i] = rgb[i * 3 + 2]
+
+	if data.water:
+		var w: Image = data.water.get_image()
+		if w.get_format() != Image.FORMAT_RF:
+			w.convert(Image.FORMAT_RF)
+		assert(w.get_width() == size and w.get_height() == size, "Water map must match the heightmap size")
+		water_height = w.get_data().to_float32_array()
+	else:
+		water_height.resize(size * size)  # Bakes from before lakes and rivers: sea only
+		water_height.fill(water_level)
 
 
 ## Height in metres at a world-space XZ position. Interpolates across the same
@@ -161,28 +195,58 @@ func surface_at(pos: Vector3, floor_collider: Object = null) -> StringName:
 	return &"grass"
 
 
-## Height of the water surface in metres, or -INF with water turned off.
+## Sea level in metres, or -INF with water turned off.
 func water_surface() -> float:
 	return water_level * max_height if water_enabled else -INF
+
+
+## Water surface height in metres at a world XZ position: the lake or river level
+## inland, sea level elsewhere. Only meaningful where it's above the ground.
+func water_surface_at(world_x: float, world_z: float) -> float:
+	if not water_enabled:
+		return -INF
+	var half := (size - 1) * 0.5
+	var gx := clampf(world_x / cell_size + half, 0.0, size - 1.001)
+	var gz := clampf(world_z / cell_size + half, 0.0, size - 1.001)
+	return _sample_map(water_height, gx, gz) * max_height
 
 
 ## How deep the water is above a point, in metres (0 on dry land or with water off).
 func water_depth_at(pos: Vector3) -> float:
 	if not water_enabled:
 		return 0.0
-	return maxf(water_level * max_height - pos.y, 0.0)
+	return maxf(water_surface_at(pos.x, pos.z) - pos.y, 0.0)
+
+
+## River current at a position (metres per second, horizontal): down the slope of the
+## water surface, so lakes and the sea are still and steep stretches run fast.
+func water_current_at(world_x: float, world_z: float) -> Vector3:
+	if not water_enabled or inland_water_at(world_x, world_z) <= 0.0 or inland_flow.is_empty():
+		return Vector3.ZERO
+	var f := inland_flow[grid_index(world_x, world_z)]
+	return Vector3(f.x, 0.0, f.y) * 1.5
+
+
+## 0..1: how much a lake or river covers this position (0 for the sea and dry land).
+func inland_water_at(world_x: float, world_z: float) -> float:
+	return inland_mask[grid_index(world_x, world_z)] if inland_mask.size() == size * size else 0.0
 
 
 func _sample(x: float, z: float) -> float:
+	return _sample_map(heights, x, z)
+
+
+## Samples a per-vertex map across the same triangles the terrain mesh uses.
+func _sample_map(map: PackedFloat32Array, x: float, z: float) -> float:
 	var cx := int(x)
 	var cz := int(z)
 	var fx := x - cx
 	var fz := z - cz
 	var i := cz * size + cx
 	if fx + fz <= 1.0:
-		return heights[i] + (heights[i + 1] - heights[i]) * fx + (heights[i + size] - heights[i]) * fz
-	var h11 := heights[i + size + 1]
-	return h11 + (heights[i + size] - h11) * (1.0 - fx) + (heights[i + 1] - h11) * (1.0 - fz)
+		return map[i] + (map[i + 1] - map[i]) * fx + (map[i + size] - map[i]) * fz
+	var h11 := map[i + size + 1]
+	return h11 + (map[i + size] - h11) * (1.0 - fx) + (map[i + 1] - h11) * (1.0 - fz)
 
 
 func _make_noise(freq: float, octaves: int, fractal: int) -> FastNoiseLite:
@@ -473,7 +537,7 @@ func _build_terrain() -> void:
 			var hu := heights[mini(z + 1, size - 1) * size + x]
 			normals[i] = Vector3((hl - hr) * max_height, 2.0 * cell_size, (hd - hu) * max_height).normalized()
 			uvs[i] = Vector2(float(x) / (size - 1), float(z) / (size - 1))
-			colors[i] = Color(flow_map[i], deposit_map[i], 0.0)
+			colors[i] = Color(flow_map[i], deposit_map[i], inland_mask[i])
 	normal_map = normals
 
 	var indices := PackedInt32Array()
@@ -550,6 +614,102 @@ func _build_water() -> void:
 	add_child(water)
 
 
+## Downstream direction and speed for every lake/river vertex: down the slope of the
+## water surface (speed 1 = rapids, a slope of about 0.14), then smoothed over the
+## neighbours. Where the water is nearly flat the raw slope is tiny and its direction
+## is noise, so without smoothing the current would point every which way.
+func _compute_inland_flow() -> void:
+	var count := size * size
+	inland_flow.resize(count)
+	inland_flow.fill(Vector2.ZERO)
+	if inland_mask.size() != count:
+		return
+	var wet := PackedByteArray()  # Vertices that carry inland water (or its bank margin)
+	wet.resize(count)
+	var sea := water_level + 0.0005
+	for z in range(1, size - 1):
+		for x in range(1, size - 1):
+			var i := z * size + x
+			if inland_mask[i] <= 0.0 and water_height[i] <= sea:
+				continue
+			wet[i] = 1
+			var gx := (water_height[i + 1] - water_height[i - 1]) * max_height / (2.0 * cell_size)
+			var gz := (water_height[i + size] - water_height[i - size]) * max_height / (2.0 * cell_size)
+			var down := -Vector2(gx, gz)
+			if down.length() > 1e-6:
+				inland_flow[i] = down.normalized() * clampf(down.length() * 7.0, 0.0, 1.0)
+	for _pass in 4:
+		var smoothed := inland_flow.duplicate()
+		for z in range(1, size - 1):
+			for x in range(1, size - 1):
+				var i := z * size + x
+				if wet[i] == 0:
+					continue
+				var sum := Vector2.ZERO
+				var n := 0
+				for dz in range(-1, 2):
+					for dx in range(-1, 2):
+						var j := i + dz * size + dx
+						if wet[j] == 1:
+							sum += inland_flow[j]
+							n += 1
+				smoothed[i] = sum / n
+		inland_flow = smoothed
+
+
+## Lake and river surfaces: one mesh over every grid cell that touches inland water,
+## with each vertex at its water height, so the river surface follows its channel
+## downhill. Vertex colour carries the downstream direction (RG), speed (B) and water
+## coverage (A, for soft edges) for inland_water.gdshader. Edges overlap the banks and
+## are hidden under them; at the river mouth the coverage fades into the sea.
+func _build_inland_water() -> void:
+	var half := (size - 1) * 0.5
+	var used := PackedInt32Array()
+	used.resize(size * size)
+	used.fill(-1)
+	var verts := PackedVector3Array()
+	var colors := PackedColorArray()
+	var indices := PackedInt32Array()
+	for z in resolution:
+		for x in resolution:
+			var i := z * size + x
+			if maxf(maxf(inland_mask[i], inland_mask[i + 1]), maxf(inland_mask[i + size], inland_mask[i + size + 1])) <= 0.01:
+				continue
+			var corners := [i, i + 1, i + size, i + size + 1]
+			for v in corners:
+				if used[v] < 0:
+					used[v] = verts.size()
+					var vx: int = v % size
+					var vz: int = v / size
+					verts.append(Vector3((vx - half) * cell_size, water_height[v] * max_height, (vz - half) * cell_size))
+					var f := inland_flow[v]
+					var speed := f.length()
+					var dir := f / speed if speed > 1e-5 else Vector2.ZERO
+					colors.append(Color(dir.x * 0.5 + 0.5, dir.y * 0.5 + 0.5, speed, inland_mask[v]))
+			indices.append_array([used[i], used[i + 1], used[i + size], used[i + 1], used[i + size + 1], used[i + size]])
+	if indices.is_empty():
+		return
+	var normals := PackedVector3Array()
+	normals.resize(verts.size())
+	normals.fill(Vector3.UP)
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_COLOR] = colors
+	arrays[Mesh.ARRAY_INDEX] = indices
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	var mat := ShaderMaterial.new()
+	mat.shader = INLAND_WATER_SHADER
+	var water := MeshInstance3D.new()
+	water.name = "InlandWater"
+	water.mesh = mesh
+	water.material_override = mat
+	water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(water)
+
+
 ## Drop the player onto dry, fairly flat land near the centre of the map.
 func _place_player() -> void:
 	var player := get_node_or_null("Player") as Node3D
@@ -562,7 +722,7 @@ func _place_player() -> void:
 	for z in range(4, size - 4, 2):
 		for x in range(4, size - 4, 2):
 			var h := heights[z * size + x]
-			if h < min_h:
+			if h < min_h or h < water_height[z * size + x] + 0.02 or inland_mask[z * size + x] > 0.0:
 				continue
 			var slope := absf(heights[z * size + x + 1] - heights[z * size + x - 1]) \
 					+ absf(heights[(z + 1) * size + x] - heights[(z - 1) * size + x])

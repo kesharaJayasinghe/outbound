@@ -177,11 +177,15 @@ func _walk(delta: float, direction: Vector3, input: Vector2) -> void:
 		speed = SPRINT_SPEED
 	elif Input.is_action_pressed("walk"):
 		speed = WALK_SPEED
-	# Wading: deeper water drags the legs back
+	# Wading: deeper water drags the legs back, and a river current pushes you along
 	var world := get_parent()
+	var target := Vector3.ZERO
 	if world and world.has_method("water_depth_at"):
-		speed *= lerpf(1.0, 0.4, smoothstep(0.3, 1.3, world.water_depth_at(global_position)))
-	var target := direction * speed * minf(input.length(), 1.0)
+		var depth: float = world.water_depth_at(global_position)
+		speed *= lerpf(1.0, 0.4, smoothstep(0.3, 1.3, depth))
+		if depth > 0.3 and world.has_method("water_current_at"):
+			target = world.water_current_at(global_position.x, global_position.z) * smoothstep(0.3, 1.2, depth) * 0.6
+	target += direction * speed * minf(input.length(), 1.0)
 
 	var accel := ACCELERATION * (1.0 if is_on_floor() else AIR_CONTROL)
 	var horizontal := Vector2(velocity.x, velocity.z).lerp(Vector2(target.x, target.z), 1.0 - exp(-accel * delta))
@@ -235,7 +239,9 @@ func _setup_character_visuals(node: Node) -> void:
 
 func _water_surface() -> float:
 	var world := get_parent()
-	return world.water_surface() if world and world.has_method("water_surface") else -INF
+	if world and world.has_method("water_surface_at"):
+		return world.water_surface_at(global_position.x, global_position.z)
+	return -INF
 
 
 ## Swim once the seabed drops away (walking out, or falling in); stand up again
@@ -264,6 +270,9 @@ func _swim(delta: float, direction: Vector3, input: Vector2) -> void:
 	swim_time += delta
 	var speed := SWIM_SPRINT_SPEED if Input.is_action_pressed("sprint") else SWIM_SPEED
 	var target := direction * speed * minf(input.length(), 1.0)
+	var world := get_parent()
+	if world.has_method("water_current_at"):
+		target += world.water_current_at(global_position.x, global_position.z)  # Rivers carry you along
 	var horizontal := Vector2(velocity.x, velocity.z).lerp(Vector2(target.x, target.z), 1.0 - exp(-SWIM_ACCELERATION * delta))
 	velocity.x = horizontal.x
 	velocity.z = horizontal.y
@@ -271,7 +280,6 @@ func _swim(delta: float, direction: Vector3, input: Vector2) -> void:
 	# Buoyancy: spring towards floating height (head above water) with a gentle bob,
 	# never lower than the seabed in water that's only just deep enough to swim
 	var float_y := _water_surface() - FLOAT_DEPTH + sin(swim_time * 1.7) * 0.04
-	var world := get_parent()
 	float_y = maxf(float_y, world.get_height(global_position.x, global_position.z) + 0.05)
 	velocity.y = lerpf(velocity.y, (float_y - global_position.y) * 4.0, 1.0 - exp(-5.0 * delta))
 	move_and_slide()
