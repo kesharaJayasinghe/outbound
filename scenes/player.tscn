@@ -1,0 +1,36 @@
+[gd_scene format=3 uid="uid://dnayudnhdmw1b"]
+
+[ext_resource type="Script" uid="uid://bjg0ger0t5m61" path="res://scripts/player/player.gd" id="1_4flbx"]
+[ext_resource type="PackedScene" uid="uid://bels22cp4y5tm" path="res://characters/human/human.fbx" id="2_human"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_fs00h"]
+radius = 0.3
+height = 1.8
+
+[sub_resource type="SphereShape3D" id="SphereShape3D_cam"]
+radius = 0.2
+
+[node name="Player" type="CharacterBody3D"]
+script = ExtResource("1_4flbx")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
+shape = SubResource("CapsuleShape3D_fs00h")
+
+[node name="Model" type="Node3D" parent="."]
+
+[node name="Human" parent="Model" instance=ExtResource("2_human")]
+transform = Transform3D(-0.338, 0, 0, 0, 0.338, 0, 0, 0, -0.338, 0, 0, 0)
+
+[node name="CameraRig" type="Node3D" parent="."]
+top_level = true
+
+[node name="Pitch" type="Node3D" parent="CameraRig"]
+
+[node name="SpringArm3D" type="SpringArm3D" parent="CameraRig/Pitch"]
+shape = SubResource("SphereShape3D_cam")
+spring_length = 3.2
+margin = 0.1
+
+[node name="Camera3D" type="Camera3D" parent="CameraRig/Pitch/SpringArm3D"]
+fov = 70.0

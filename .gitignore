@@ -1,0 +1,28 @@
+# Godot 4+ cache and generated files (rebuilt on import)
+.godot/
+/android/
+
+# Export output
+/build/
+/export/
+*.pck
+*.zip
+*.apk
+*.aab
+*.exe
+*.dmg
+# Export presets can hold signing passwords and local paths
+export_presets.cfg
+export_credentials.cfg
+
+# OS / editor clutter
+.DS_Store
+Thumbs.db
+*.tmp
+*~
+# Personal editor settings (contain machine-specific paths)
+.vscode/
+.idea/
+
+# Claude Code: personal settings stay local; shared project skills are committed
+.claude/settings.local.json

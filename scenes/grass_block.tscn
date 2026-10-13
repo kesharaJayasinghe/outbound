@@ -1,0 +1,22 @@
+[gd_scene format=3 uid="uid://dnqs3pckxjlys"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_fs00h"]
+size = Vector3(2, 2, 2)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_yncnp"]
+albedo_color = Color(0.716957, 0.5948411, 0.25412306, 1)
+roughness = 0.8
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_fs00h"]
+size = Vector3(2, 2, 2)
+
+[node name="GrassBlock" type="Node3D" unique_id=436939176]
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="." unique_id=1783764895]
+mesh = SubResource("BoxMesh_fs00h")
+surface_material_override/0 = SubResource("StandardMaterial3D_yncnp")
+
+[node name="StaticBody3D" type="StaticBody3D" parent="." unique_id=381421795]
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="StaticBody3D" unique_id=1780332595]
+shape = SubResource("BoxShape3D_fs00h")

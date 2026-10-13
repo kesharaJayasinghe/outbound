@@ -1,0 +1,30 @@
+Audio sources (all CC0 1.0 / public domain - no attribution required, credited anyway)
+
+sea_shore.wav, sea_distant.wav
+  "Sea and river wave sounds" by RandomMind
+  https://opengameart.org/content/sea-and-river-wave-sounds
+  Trimmed, loudness-normalised and made into seamless loops (sea_distant is low-passed).
+
+birds.wav
+  "Birds and Wind - Ambient" by Spring Spring
+  (bird recordings by isaiah658, syncopika and pauliuw, all public domain)
+  https://opengameart.org/content/birds-and-wind-ambient-birds-wind-and-synth
+  Loudness-normalised and made into a seamless loop.
+
+footsteps/soft_*.wav, footsteps/stone_*.wav
+  "Fantozzi's Footsteps (Grass/Sand & Stone)" by Fantozzi, packaged by qubodup
+  https://opengameart.org/content/fantozzis-footsteps-grasssand-stone
+  Leading silence trimmed, converted to mono, loudness-normalised.
+
+wind.wav
+  Synthesised for this project with ffmpeg (filtered brown/pink noise with gust envelopes).
+
+footsteps/water_1-7.wav, footsteps/water_land_1-2.wav
+  "40 CC0 water / splash / slime SFX" by rubberduck (splash_02/03/06/08/12/14/15, splash_04/07)
+  https://opengameart.org/content/40-cc0-water-splash-slime-sfx
+  Leading silence trimmed, shortened with fade-outs, converted to mono, loudness-normalised.
+
+footsteps/water_land_3.wav
+  "Water Splash and sand footsteps" by Peludo (splash2.wav)
+  https://opengameart.org/content/water-splash-and-sand-footsteps
+  Leading silence trimmed, shortened with a fade-out, loudness-normalised.
