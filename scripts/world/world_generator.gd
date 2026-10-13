@@ -12,6 +12,7 @@ const INLAND_WATER_SHADER = preload("res://shaders/inland_water.gdshader")
 const WATER_CARVER = preload("res://scripts/world/water_carver.gd")
 const VEGETATION = preload("res://scripts/world/vegetation.gd")
 const AMBIENT_AUDIO = preload("res://scripts/world/ambient_audio.gd")
+const BUILDER = preload("res://scripts/build/builder.gd")
 
 ## Load this baked island (see tools/bake_island.gd) instead of generating one.
 ## Clear it to generate from the settings below. Shape, Erosion and beach settings
@@ -100,6 +101,12 @@ func _ready() -> void:
 		ambience.name = "AmbientAudio"
 		add_child(ambience)
 		ambience.setup(self, vegetation)
+	var player := get_node_or_null("Player") as CharacterBody3D
+	if player:
+		var builder := BUILDER.new()
+		builder.name = "Builder"
+		add_child(builder)
+		builder.setup(self, player)
 
 
 ## Runs the procedural pipeline (no scene nodes are built). Used by _ready and by the

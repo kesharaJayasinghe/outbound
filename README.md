@@ -26,6 +26,10 @@ island with eroded mountains, beaches, jungle, wildlife ambience and a swimmable
 - **Sound**: surf from the nearest shoreline, birdsong in the forest and wind at altitude.
   Footsteps match the ground (grass, sand, stone or water), and there are splashes and swim strokes.
 - **Footprints in the sand** that fade away after a few seconds.
+- **Crafting and building**: craft a palm-frond lean-to shelter and place it anywhere dry and
+  level enough. A preview shows green where it fits and red where it doesn't. On a slope the
+  downhill posts stretch to reach the ground. Gathering isn't in yet, so building is free for
+  now.
 
 ## Running
 
@@ -44,9 +48,13 @@ The island loads from the baked files in `world/`, so startup is quick.
 | Alt / Option | Walk |
 | Space | Jump |
 | V | Toggle first / third person |
+| B | Crafting menu (number keys pick a recipe) |
+| Click / Right-click | Build / cancel, while placing |
+| Mouse wheel / R | Rotate the preview 15° / 90° |
 | Esc | Release the mouse (click to recapture) |
 
-Bindings live in **Project Settings → Input Map**.
+Bindings live in **Project Settings → Input Map**. `build_menu` (B) and `rotate_build` (R) get
+default keys in code if the Input Map doesn't define them.
 
 ## The island: bake, then edit
 

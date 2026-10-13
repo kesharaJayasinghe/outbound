@@ -5,6 +5,8 @@ extends CharacterBody3D
 ## it moves, and walk / jog / sprint animations blended by speed. V toggles first person.
 ## In deep water the character swims: treading water when still, front crawl when moving.
 
+const INVENTORY = preload("res://scripts/build/inventory.gd")
+
 const WALK_SPEED = 1.6
 const JOG_SPEED = 4.5
 const SPRINT_SPEED = 7.0
@@ -90,6 +92,7 @@ var crawl := 0.0        # 0 = treading water, 1 = front crawl
 var swim_time := 0.0
 var swim_modifier: SkeletonModifier3D
 var footprints: Node3D
+var inventory = INVENTORY.new()  ## Resources carried, spent on crafting (builder.gd)
 
 @onready var model: Node3D = $Model
 @onready var camera_rig: Node3D = $CameraRig
