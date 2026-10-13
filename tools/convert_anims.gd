@@ -1,19 +1,25 @@
 extends SceneTree
 
-## Converts the swim clips exported from Blender into an AnimationLibrary for human.fbx.
+## Converts the hand-keyed clips exported from Blender into AnimationLibraries for human.fbx.
 ##
-## The clips are authored in player-swim.blend (keyed by its `swim_clips.py` text block) on a
-## Blender import of human.fbx, and exported as a glb with one NLA track per clip:
-## `swim_tread`, `swim_crawl`, and `check_idle` (the FBX's own Idle, used to verify this
+## The clips are authored in player-swim.blend (keyed by its `swim_clips.py` and `sit_clips.py`
+## text blocks) on a Blender import of human.fbx, and exported as a glb with one NLA track per
+## clip: those in CLIPS, plus `check_idle` (the FBX's own Idle, used to verify this
 ## conversion). Godot reads the same bone frames from both files; only the root (Hips) bone's
 ## tracks differ, being relative to differently oriented and scaled parent nodes, so they're
 ## mapped across. Only rotations (plus the Hips position) are kept.
 ##
-##   Godot --headless --path . --script res://tools/convert_swim_anims.gd -- --in=<swim_source.glb>
+##   Godot --headless --path . --script res://tools/convert_anims.gd -- --in=<anim_source.glb>
 
 const FBX = "res://characters/human/human.fbx"
-const OUT = "res://characters/human/swim_animations.res"
-const CLIPS = {"swim_tread": "tread", "swim_crawl": "crawl"}  # glb name -> library name
+const OUT = "res://characters/human/%s_animations.res"  # One file per library
+# glb clip -> [library, clip name, loops]
+const CLIPS = {
+	"swim_tread": ["swim", "tread", true],
+	"swim_crawl": ["swim", "crawl", true],
+	"sit_down": ["sit", "down", false],  # Played backwards to stand up
+	"sit_idle": ["sit", "idle", true],
+}
 const ROOT_BONE = "Hips"
 
 
@@ -48,20 +54,26 @@ func _init() -> void:
 
 	var check := _convert(glb_player.get_animation("check_idle"), skel_path, mapping)
 	if not _verify(check, fbx_player.get_animation("Human Armature|Idle")):
-		push_error("Converted Idle doesn't match the FBX Idle; not writing " + OUT)
+		push_error("Converted Idle doesn't match the FBX Idle; not writing any library")
 		quit(1)
 		return
 
-	var lib := AnimationLibrary.new()
+	var libs := {}
 	for glb_name in CLIPS:
+		var lib_name: String = CLIPS[glb_name][0]
+		var clip_name: String = CLIPS[glb_name][1]
 		var anim := _convert(glb_player.get_animation(glb_name), skel_path, mapping)
-		# The last key repeats the first; end the loop there instead of one frame later
+		# End on the last key (for a loop it repeats the first) instead of one frame later
 		anim.length = _last_key_time(anim)
-		anim.loop_mode = Animation.LOOP_LINEAR
-		lib.add_animation(CLIPS[glb_name], anim)
-		print("%s: %.2f s, %d tracks" % [CLIPS[glb_name], anim.length, anim.get_track_count()])
-	var err := ResourceSaver.save(lib, OUT)
-	print("Saved " + OUT if err == OK else "Save failed: %d" % err)
+		anim.loop_mode = Animation.LOOP_LINEAR if CLIPS[glb_name][2] else Animation.LOOP_NONE
+		if not libs.has(lib_name):
+			libs[lib_name] = AnimationLibrary.new()
+		libs[lib_name].add_animation(clip_name, anim)
+		print("%s/%s: %.2f s, %d tracks" % [lib_name, clip_name, anim.length, anim.get_track_count()])
+	for lib_name in libs:
+		var path := OUT % lib_name
+		var err := ResourceSaver.save(libs[lib_name], path)
+		print("Saved " + path if err == OK else "Save failed: %d" % err)
 	fbx.free()
 	glb.free()
 	quit()

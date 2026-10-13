@@ -62,6 +62,7 @@ The island loads from the baked files in `world/`, so startup is quick.
 | Alt / Option | Walk |
 | Space | Jump |
 | V | Toggle first / third person |
+| C | Sit down on the ground / get up (moving or jumping also gets up) |
 | M | Interaction menu: scroll (mouse wheel or two-finger trackpad) selects, click confirms, right-click goes back |
 | Click / Right-click | Build / back to the menu, while placing |
 | Scroll / R | Rotate the preview 15° / 90°, while placing |

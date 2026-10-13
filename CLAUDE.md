@@ -119,9 +119,11 @@ particles, and the river-rush loop pitched down as the roar).
   (ground/air/swim transition), footsteps and splashes, swimming. `footprints.gd` holds a pooled,
   fading Decal trail that sand steps leave behind. Swimming plays two hand-keyed clips
   (`characters/human/swim_animations.res`: tread, crawl) blended by speed, each sought to a
-  phase the controller advances so splashes land on hand entry. They're authored in
-  `player-swim.blend` (outside the repo) and converted with `tools/convert_swim_anims.gd`, which
-  maps the root bone between the glb and FBX skeletons and checks the result against Idle.
+  phase the controller advances so splashes land on hand entry. Sitting (C) plays
+  `sit_animations.res`: `down` (sought forwards, then backwards to stand up) and a seated
+  `idle` loop. All are authored in `player-swim.blend` (outside the repo; `swim_clips.py` and
+  `sit_clips.py` text blocks) and converted with `tools/convert_anims.gd`, which maps the root
+  bone between the glb and FBX skeletons and checks the result against Idle.
 
 ## Conventions and gotchas
 
