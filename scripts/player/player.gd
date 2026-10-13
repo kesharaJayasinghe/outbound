@@ -28,6 +28,10 @@ const ANIM_IDLE = "Human Armature|Idle"
 const ANIM_WALK = "Human Armature|Walk"
 const ANIM_RUN = "Human Armature|Run"
 const ANIM_JUMP = "Human Armature|Jump"
+## Swim clips (treading water, front crawl), authored for this skeleton; see tools/convert_swim_anims.gd
+const SWIM_ANIMS = preload("res://characters/human/swim_animations.res")
+const ANIM_TREAD = "swim/tread"
+const ANIM_CRAWL = "swim/crawl"
 
 # Footsteps: each set lists its left-foot sounds first, then the same number of right-foot sounds
 const SOFT_STEPS = [
@@ -90,7 +94,8 @@ var swimming := false
 var swim_blend := 0.0   # 0 = on foot, 1 = fully in the swimming pose
 var crawl := 0.0        # 0 = treading water, 1 = front crawl
 var swim_time := 0.0
-var swim_modifier: SkeletonModifier3D
+var tread_phase := 0.0  # Position in the treading-water cycle (0..1)
+var stroke_phase := 0.0 # Position in the front-crawl cycle: left hand enters at 0, right at 0.5
 var footprints: Node3D
 var inventory = INVENTORY.new()  ## Resources carried, spent on crafting (builder.gd)
 
@@ -111,9 +116,6 @@ func _ready() -> void:
 	footprints.name = "Footprints"
 	add_child(footprints)
 	footprints.set_excluded_layers(1 << (CHARACTER_LAYER - 1))  # Don't print onto our own feet
-	swim_modifier = preload("res://scripts/player/swim_modifier.gd").new()
-	swim_modifier.influence = 0.0
-	model.find_child("Skeleton3D", true, false).add_child(swim_modifier)
 	for i in 2:
 		var foot := AudioStreamPlayer3D.new()
 		foot.bus = &"SFX"
@@ -211,6 +213,8 @@ func _process(delta: float) -> void:
 
 	var sprinting := Input.is_action_pressed("sprint") and Vector2(velocity.x, velocity.z).length() > JOG_SPEED
 	camera.fov = lerpf(camera.fov, SPRINT_FOV if sprinting else BASE_FOV, 1.0 - exp(-4.0 * delta))
+	if swim_blend > 0.0:
+		_update_swim_strokes(delta)
 
 
 func _apply_view_mode() -> void:
@@ -287,22 +291,30 @@ func _swim(delta: float, direction: Vector3, input: Vector2) -> void:
 	velocity.y = lerpf(velocity.y, (float_y - global_position.y) * 4.0, 1.0 - exp(-5.0 * delta))
 	move_and_slide()
 
-	# Advance the stroke; arms enter the water twice per cycle, each with a small splash
-	var swim_speed := horizontal.length()
-	var before := floori(swim_modifier.phase * 2.0)
-	swim_modifier.phase += delta * lerpf(0.35, 0.45 + 0.3 * swim_speed / SWIM_SPEED, crawl)
-	if floori(swim_modifier.phase * 2.0) != before and crawl > 0.4:
+
+## Plays the swim clips at the stroke rate, which picks up with speed. Each clip is sought
+## to its phase every frame, so the hands meet the water exactly when the splashes play.
+func _update_swim_strokes(delta: float) -> void:
+	var swim_speed := Vector2(velocity.x, velocity.z).length()
+	var tread_length := SWIM_ANIMS.get_animation("tread").length
+	var crawl_length := SWIM_ANIMS.get_animation("crawl").length
+	tread_phase = fposmod(tread_phase + delta / tread_length, 1.0)
+	# The clip's own pace (one cycle per crawl_length) is the stroke rate at SWIM_SPEED
+	var before := floori(stroke_phase * 2.0)
+	stroke_phase += delta / crawl_length * lerpf(0.65, 1.0, swim_speed / SWIM_SPEED)
+	if floori(stroke_phase * 2.0) != before and crawl > 0.4 and swimming:
 		_play_stroke_splash(swim_speed / SWIM_SPRINT_SPEED)
+	stroke_phase = fposmod(stroke_phase, 1.0)
+	anim_tree.set("parameters/tread_seek/seek_request", tread_phase * tread_length)
+	anim_tree.set("parameters/crawl_seek/seek_request", stroke_phase * crawl_length)
+	anim_tree.set("parameters/swim/blend_amount", crawl)
 
 
-## Tilts the body flat for the crawl (pivoting about the chest, not the feet) and
-## drives the procedural swim pose.
+## Tilts the body flat for the crawl, pivoting about the chest, not the feet.
 func _update_swim_pose(delta: float) -> void:
 	swim_blend = move_toward(swim_blend, 1.0 if swimming else 0.0, delta * 2.5)
 	var target_crawl := clampf(Vector2(velocity.x, velocity.z).length() / 1.2, 0.0, 1.0) if swimming else 0.0
 	crawl = lerpf(crawl, target_crawl, 1.0 - exp(-3.0 * delta))
-	swim_modifier.influence = swim_blend
-	swim_modifier.crawl = crawl
 
 	var tilt := CRAWL_PITCH * crawl * swim_blend
 	model.rotation.x = tilt
@@ -428,9 +440,10 @@ func _floor_collider() -> Object:
 ## Builds the animation graph:
 ##   locomotion (blend space idle -> walk -> run by speed) -> time scale --\
 ##   jump clip (seekable) ------------------------------------------------> ground/air/swim transition
-##   idle clip (base pose for swimming) ---------------------------------/
+##   tread / crawl clips (each sought to its phase), blended by speed ---/
 func _build_animation_tree() -> AnimationTree:
 	var player: AnimationPlayer = model.find_child("AnimationPlayer", true, false)
+	player.add_animation_library("swim", SWIM_ANIMS)
 	for anim_name in [ANIM_IDLE, ANIM_WALK, ANIM_RUN]:
 		player.get_animation(anim_name).loop_mode = Animation.LOOP_LINEAR
 	_flatten_jump_hips(player.get_animation(ANIM_JUMP))
@@ -453,10 +466,18 @@ func _build_animation_tree() -> AnimationTree:
 	graph.add_node("speed_scale", AnimationNodeTimeScale.new())
 	graph.add_node("jump", _clip(ANIM_JUMP))
 	graph.add_node("jump_seek", AnimationNodeTimeSeek.new())
-	graph.add_node("swim", _clip(ANIM_IDLE))  # Base pose; swim_modifier.gd moves the limbs
+	graph.add_node("tread", _clip(ANIM_TREAD))
+	graph.add_node("tread_seek", AnimationNodeTimeSeek.new())
+	graph.add_node("crawl", _clip(ANIM_CRAWL))
+	graph.add_node("crawl_seek", AnimationNodeTimeSeek.new())
+	graph.add_node("swim", AnimationNodeBlend2.new())
 	graph.add_node("state", state)
 	graph.connect_node("speed_scale", 0, "locomotion")
 	graph.connect_node("jump_seek", 0, "jump")
+	graph.connect_node("tread_seek", 0, "tread")
+	graph.connect_node("crawl_seek", 0, "crawl")
+	graph.connect_node("swim", 0, "tread_seek")
+	graph.connect_node("swim", 1, "crawl_seek")
 	graph.connect_node("state", 0, "speed_scale")
 	graph.connect_node("state", 1, "jump_seek")
 	graph.connect_node("state", 2, "swim")

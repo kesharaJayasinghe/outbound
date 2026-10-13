@@ -80,15 +80,21 @@ per-vertex water heights. Vertex colour carries the downstream direction and spe
   move together.
 - `scripts/build/`: crafting and placement. `recipes.gd` lists recipes: scene, cost, post
   footprint, clearance box. `inventory.gd` is the player's resources (`player.inventory`);
-  `free_build` is on until gathering exists. `builder.gd` has the B menu, the preview and its
+  `free_build` is on until gathering exists. `builder.gd` has the M interaction menu (pages
+  of rows built in `_open_menu`; context rows carry a `target` that's highlighted while
+  selected), the preview and its
   checks (dry, unevenness, a physics box query for clearance), and placement. It stretches
   meshes named `Post*` down to the ground and generates convex collision from the other
-  meshes (skipping `Lash*`). Placed builds go under `Structures` and aren't saved yet.
+  meshes (skipping `Lash*`). Placed builds go under `Structures` (with a `recipe` meta) and
+  aren't saved yet. The menu's "Take down" row removes the build the camera faces and
+  refunds it.
 - `scripts/player/player.gd`: CharacterBody3D controller, an AnimationTree built in code
   (ground/air/swim transition), footsteps and splashes, swimming. `footprints.gd` holds a pooled,
-  fading Decal trail that sand steps leave behind. `swim_modifier.gd` is a
-  `SkeletonModifier3D` that aims limbs for treading water / front crawl; the model has no swim
-  clip.
+  fading Decal trail that sand steps leave behind. Swimming plays two hand-keyed clips
+  (`characters/human/swim_animations.res`: tread, crawl) blended by speed, each sought to a
+  phase the controller advances so splashes land on hand entry. They're authored in
+  `player-swim.blend` (outside the repo) and converted with `tools/convert_swim_anims.gd`, which
+  maps the root bone between the glb and FBX skeletons and checks the result against Idle.
 
 ## Conventions and gotchas
 

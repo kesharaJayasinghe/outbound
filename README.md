@@ -22,7 +22,7 @@ island with eroded mountains, beaches, jungle, wildlife ambience and a swimmable
 - **Third-person character**, with controls in the style of GTA V: an over-the-shoulder camera,
   walk, jog and sprint, jumping, and a first-person toggle.
 - **Swimming**: wade into the shallows, then swim in deep water. The character treads water when
-  still and does front crawl when moving, animated procedurally.
+  still and does front crawl (with body roll and breathing) when moving.
 - **Sound**: surf from the nearest shoreline, birdsong in the forest and wind at altitude.
   Footsteps match the ground (grass, sand, stone or water), and there are splashes and swim strokes.
 - **Footprints in the sand** that fade away after a few seconds.
@@ -30,6 +30,9 @@ island with eroded mountains, beaches, jungle, wildlife ambience and a swimmable
   level enough. A preview shows green where it fits and red where it doesn't. On a slope the
   downhill posts stretch to reach the ground. Gathering isn't in yet, so building is free for
   now.
+- **Interaction menu** (M), like GTA Online's: Craft, plus actions for what's in front of
+  you, such as taking down a shelter you face, which refunds its cost. Nothing is on screen
+  until you open it.
 
 ## Running
 
@@ -48,12 +51,13 @@ The island loads from the baked files in `world/`, so startup is quick.
 | Alt / Option | Walk |
 | Space | Jump |
 | V | Toggle first / third person |
-| B | Crafting menu (number keys pick a recipe) |
-| Click / Right-click | Build / cancel, while placing |
-| Mouse wheel / R | Rotate the preview 15° / 90° |
+| M | Interaction menu: scroll (mouse wheel or two-finger trackpad) selects, click confirms, right-click goes back |
+| Click / Right-click | Build / back to the menu, while placing |
+| Scroll / R | Rotate the preview 15° / 90°, while placing |
 | Esc | Release the mouse (click to recapture) |
 
-Bindings live in **Project Settings → Input Map**. `build_menu` (B) and `rotate_build` (R) get
+Bindings live in **Project Settings → Input Map**. `interaction_menu` (M, or the
+touchpad on a PlayStation controller) and `rotate_build` (R) get
 default keys in code if the Input Map doesn't define them.
 
 ## The island: bake, then edit
@@ -104,7 +108,7 @@ Colours, wind and other visual parameters are shader uniforms on the materials i
 ```
 scenes/          world_generator.tscn (main), player.tscn
 scripts/world/   island generation, vegetation, procedural meshes, ambient audio
-scripts/player/  character controller, procedural swim animation
+scripts/player/  character controller, swimming, footprints
 shaders/         terrain, water, grass, foliage, bark, rock (+ shared wind include)
 audio/           ambience loops and footstep / splash sounds (see audio/CREDITS.txt)
 characters/      player model (see characters/human/LICENSE.txt)
