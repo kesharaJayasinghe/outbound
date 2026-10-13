@@ -16,6 +16,9 @@ island with eroded mountains, beaches, jungle, wildlife ambience and a swimmable
 - **Lake and river**: a hillside lake drains through a meandering river, with flowing ripples
   and white water on the rapids, down to a delta on the beach. You can swim in the lake, and
   the river's current carries you along.
+- **Waterfall**: a second stream leaves the lake westward through a rocky gorge and plunges
+  27 m off the western cliffs into the lagoon, with mist and foam at the base and a roar you
+  can hear from the beach.
 - **Vegetation**: coconut palms on the shore, rainforest trees, big-leaf undergrowth, scattered
   rocks and a dense GPU grass field around the player. It all sways in shared wind, and every
   mesh and leaf texture is generated in code.
@@ -70,7 +73,7 @@ the game loads at startup:
 | `island_height.exr` | 32-bit float heightmap, one pixel per terrain vertex. 1.0 = 90 m; values below 0 are deep seabed. |
 | `island_masks.exr` | Float RGB: **R** drainage flow (gullies, wet ground), **G** sediment, **B** lake and river coverage |
 | `island_water.exr` | Water surface height per vertex, in the heightmap's units: sea level everywhere except over the lake and river |
-| `island.tres` | Ties the images together with the cell size, height scale, water level and seed |
+| `island.tres` | Ties the images together with the cell size, height scale, water level and seed, and lists the waterfalls |
 
 **Editing:** open the EXR files in an image editor that handles 32-bit float, such as Krita.
 Paint, save, and Godot re-imports the changes. Vegetation, grass, sand, sounds and the player's

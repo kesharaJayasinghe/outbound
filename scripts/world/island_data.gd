@@ -19,6 +19,8 @@ extends Resource
 @export var heightmap: Texture2D
 @export var masks: Texture2D
 @export var water: Texture2D
+## Waterfalls to draw: {top (lip position, metres), dir, drop, width} each
+@export var waterfalls: Array[Dictionary] = []
 @export var cell_size := 2.0
 @export var max_height := 90.0
 @export var water_level := 0.08

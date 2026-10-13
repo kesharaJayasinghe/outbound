@@ -12,6 +12,8 @@ const INLAND_WATER_SHADER = preload("res://shaders/inland_water.gdshader")
 const WATER_CARVER = preload("res://scripts/world/water_carver.gd")
 const VEGETATION = preload("res://scripts/world/vegetation.gd")
 const AMBIENT_AUDIO = preload("res://scripts/world/ambient_audio.gd")
+const WATERFALL = preload("res://scripts/world/waterfall.gd")
+const WATERFALL_STEP = 3.0  # Water surface drop across one cell (metres) that counts as a waterfall
 const BUILDER = preload("res://scripts/build/builder.gd")
 
 ## Load this baked island (see tools/bake_island.gd) instead of generating one.
@@ -42,6 +44,8 @@ const BUILDER = preload("res://scripts/build/builder.gd")
 @export var lake_depth: float = 4.0        ## Metres at the centre
 @export var river_width: float = 7.0       ## Metres near the lake; widens downstream
 @export var river_depth: float = 1.1       ## Metres at the centre near the lake; deepens downstream
+@export var waterfall: bool = true         ## A second river from the lake, over a cliff as a waterfall
+@export_range(0.0, 360.0) var waterfall_bearing: float = 270.0  ## Compass direction from the lake to look for a cliff (0 = north/-Z, 90 = east/+X)
 
 @export_group("Vegetation")
 @export var vegetation_enabled: bool = true
@@ -71,6 +75,7 @@ var island_edge := PackedFloat32Array() # Per-vertex distance through the island
 var water_height := PackedFloat32Array() # Water surface per vertex (normalised): sea level, or lake/river level inland
 var inland_mask := PackedFloat32Array()  # 1 where a lake or river covers the vertex
 var inland_flow := PackedVector2Array()  # Smoothed downstream direction x speed (0..1) per vertex
+var waterfalls: Array[Dictionary] = []   # {top (lip, metres), dir, drop, width} per fall, from water_carver.gd
 var size := 0                          # Vertices per side
 var rng := RandomNumberGenerator.new()
 
@@ -86,6 +91,7 @@ func _ready() -> void:
 	if water_enabled:
 		_build_water()
 		_build_inland_water()
+		_build_waterfalls()
 	_place_player()
 	print("Terrain %s in %d ms" % ["loaded" if baked_island else "generated", Time.get_ticks_msec() - t])
 	var vegetation: Node3D = null
@@ -125,6 +131,7 @@ func generate() -> void:
 		_sink_seabed()
 	water_height.resize(size * size)
 	water_height.fill(water_level)
+	waterfalls.clear()
 	inland_mask.resize(size * size)
 	inland_mask.fill(0.0)
 	if water_enabled and lake_and_river:
@@ -170,6 +177,7 @@ func _load_baked(data: Resource) -> void:
 	else:
 		water_height.resize(size * size)  # Bakes from before lakes and rivers: sea only
 		water_height.fill(water_level)
+	waterfalls.assign(data.get("waterfalls") if data.get("waterfalls") != null else [])
 
 
 ## Height in metres at a world-space XZ position. Interpolates across the same
@@ -682,6 +690,11 @@ func _build_inland_water() -> void:
 			var i := z * size + x
 			if maxf(maxf(inland_mask[i], inland_mask[i + 1]), maxf(inland_mask[i + size], inland_mask[i + size + 1])) <= 0.01:
 				continue
+			# A waterfall's drop: the falling water is its own mesh (waterfall.gd)
+			var lo := minf(minf(water_height[i], water_height[i + 1]), minf(water_height[i + size], water_height[i + size + 1]))
+			var hi := maxf(maxf(water_height[i], water_height[i + 1]), maxf(water_height[i + size], water_height[i + size + 1]))
+			if (hi - lo) * max_height > WATERFALL_STEP:
+				continue
 			var corners := [i, i + 1, i + size, i + size + 1]
 			for v in corners:
 				if used[v] < 0:
@@ -715,6 +728,14 @@ func _build_inland_water() -> void:
 	water.material_override = mat
 	water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(water)
+
+
+func _build_waterfalls() -> void:
+	for fall in waterfalls:
+		var node := WATERFALL.new()
+		node.name = "Waterfall"
+		add_child(node, true)
+		node.build(fall)
 
 
 ## Drop the player onto dry, fairly flat land near the centre of the map.
