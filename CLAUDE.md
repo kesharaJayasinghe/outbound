@@ -56,7 +56,8 @@ The generator is the source of truth for terrain queries. Use these rather than 
 - `shaders/wind.gdshaderinc`: the shared wind model, used by grass, foliage and bark so they
   move together.
 - `scripts/player/player.gd`: CharacterBody3D controller, an AnimationTree built in code
-  (ground/air/swim transition), footsteps and splashes, swimming. `swim_modifier.gd` is a
+  (ground/air/swim transition), footsteps and splashes, swimming. `footprints.gd` holds a pooled,
+  fading Decal trail that sand steps leave behind. `swim_modifier.gd` is a
   `SkeletonModifier3D` that aims limbs for treading water / front crawl; the model has no swim
   clip.
 

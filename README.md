@@ -22,6 +22,7 @@ island with eroded mountains, beaches, jungle, wildlife ambience and a swimmable
   still and does front crawl when moving, animated procedurally.
 - **Sound**: surf from the nearest shoreline, birdsong in the forest and wind at altitude.
   Footsteps match the ground (grass, sand, stone or water), and there are splashes and swim strokes.
+- **Footprints in the sand** that fade away after a few seconds.
 
 ## Running
 

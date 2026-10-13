@@ -66,6 +66,8 @@ const CRAWL_PITCH = -1.35      # Body tilt (radians) when swimming flat out
 const SWIM_CAMERA_HEIGHT = 0.65  # Camera pivot above the water while swimming
 const SWIM_EYE_HEIGHT = 0.2
 
+const FOOT_SPACING = 0.11      # Sideways distance from the body's centre to each footprint
+
 const MIN_SPLASH_DEPTH = 0.03  # Water this shallow (metres) still sounds like wet sand
 const MAX_WADE_DEPTH = 1.4     # Deeper than this the body is submerged and steps are silent
 # Distance covered per step, matched to the walk and run animation cycles
@@ -87,6 +89,7 @@ var swim_blend := 0.0   # 0 = on foot, 1 = fully in the swimming pose
 var crawl := 0.0        # 0 = treading water, 1 = front crawl
 var swim_time := 0.0
 var swim_modifier: SkeletonModifier3D
+var footprints: Node3D
 
 @onready var model: Node3D = $Model
 @onready var camera_rig: Node3D = $CameraRig
@@ -101,6 +104,10 @@ func _ready() -> void:
 	spring_arm.add_excluded_object(get_rid())
 	camera.current = true
 	_setup_character_visuals(model)
+	footprints = preload("res://scripts/player/footprints.gd").new()
+	footprints.name = "Footprints"
+	add_child(footprints)
+	footprints.set_excluded_layers(1 << (CHARACTER_LAYER - 1))  # Don't print onto our own feet
 	swim_modifier = preload("res://scripts/player/swim_modifier.gd").new()
 	swim_modifier.influence = 0.0
 	model.find_child("Skeleton3D", true, false).add_child(swim_modifier)
@@ -359,11 +366,23 @@ func _play_step(intensity: float, landing: bool) -> void:
 			stream = pool[side * half + (pool.find(stream) - side * half + 1 + randi() % (half - 1)) % half]
 		last_step[side] = stream
 		foot.stream = stream
+		if surface == &"sand":
+			_leave_footprint(side == 0)
 		# Grass uses the "soft" recording, pitched down and quieter
 		foot.pitch_scale = randf_range(0.92, 1.08) * (0.88 if surface == &"grass" else 1.0)
 		foot.volume_db = linear_to_db(intensity) + (-5.0 if surface == &"grass" else -1.0 if surface == &"sand" else 0.0) \
 				+ (2.0 if landing else 0.0)
 		foot.play()
+
+
+func _leave_footprint(left: bool) -> void:
+	var yaw := model.global_rotation.y
+	var right := Vector3(cos(yaw), 0.0, -sin(yaw))
+	var pos := global_position + right * (-FOOT_SPACING if left else FOOT_SPACING)
+	var world := get_parent()
+	if world and world.has_method("get_height"):
+		pos.y = world.get_height(pos.x, pos.z)
+	footprints.add(pos, yaw, left)
 
 
 ## Wading: splashes get louder and deeper-pitched as the water gets deeper. Jumping in,
