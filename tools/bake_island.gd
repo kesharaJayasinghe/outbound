@@ -4,7 +4,7 @@ extends SceneTree
 ##   <name>_height.exr  32-bit float heightmap (edit in Krita etc.)
 ##   <name>_masks.exr   flow / deposit / lake+river masks (float RGB)
 ##   <name>_water.exr   water surface height (sea level, or lake / river level inland)
-##   (the .tres also lists the waterfalls)
+##   (the .tres also lists the waterfalls and islets)
 ##   <name>.tres        IslandData resource tying them together (assign to the
 ##                      generator's `baked_island`)
 ## Uses the generation settings on scenes/world_generator.tscn. Imports the new files
@@ -80,7 +80,8 @@ water_level = %s
 terrain_seed = %d
 rng_state = %d
 waterfalls = %s
-""" % [base, base, base, var_to_str(gen.cell_size), var_to_str(gen.max_height), var_to_str(gen.water_level), gen.terrain_seed, gen.rng.state, var_to_str(gen.waterfalls)]
+islets = %s
+""" % [base, base, base, var_to_str(gen.cell_size), var_to_str(gen.max_height), var_to_str(gen.water_level), gen.terrain_seed, gen.rng.state, var_to_str(gen.waterfalls), var_to_str(gen.islets)]
 	FileAccess.open(base + ".tres", FileAccess.WRITE).store_string(tres)
 	var baked_seed: int = gen.terrain_seed
 	gen.free()

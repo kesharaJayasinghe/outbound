@@ -21,6 +21,8 @@ extends Resource
 @export var water: Texture2D
 ## Waterfalls to draw: {top (lip position, metres), dir, drop, width} each
 @export var waterfalls: Array[Dictionary] = []
+## Islets (small islands off the main one): {center (world X, Z), radius} each
+@export var islets: Array[Dictionary] = []
 @export var cell_size := 2.0
 @export var max_height := 90.0
 @export var water_level := 0.08

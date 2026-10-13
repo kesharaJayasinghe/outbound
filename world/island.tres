@@ -21,3 +21,7 @@ waterfalls = Array[Dictionary]([{
 "top": Vector3(-163.4741, 34.656216, 46.03473),
 "width": 5.6000000000000005
 }])
+islets = Array[Dictionary]([{
+"center": Vector2(-410, 210),
+"radius": 99.37939676110794
+}])

@@ -13,6 +13,7 @@ const WATER_CARVER = preload("res://scripts/world/water_carver.gd")
 const VEGETATION = preload("res://scripts/world/vegetation.gd")
 const AMBIENT_AUDIO = preload("res://scripts/world/ambient_audio.gd")
 const WATERFALL = preload("res://scripts/world/waterfall.gd")
+const HIDDEN_SEABED_DEPTH = 24.0  # Seabed deeper than this (metres) is left out of the terrain mesh
 const WATERFALL_STEP = 3.0  # Water surface drop across one cell (metres) that counts as a waterfall
 const BUILDER = preload("res://scripts/build/builder.gd")
 
@@ -47,6 +48,12 @@ const BUILDER = preload("res://scripts/build/builder.gd")
 @export var waterfall: bool = true         ## A second river from the lake, over a cliff as a waterfall
 @export_range(0.0, 360.0) var waterfall_bearing: float = 270.0  ## Compass direction from the lake to look for a cliff (0 = north/-Z, 90 = east/+X)
 
+@export_group("Islet")
+@export var islet: bool = true             ## A small, low, sandy island off the main one
+@export var world_resolution: int = 640    ## Cells per side of the whole world; the main island sits in the middle (must exceed `resolution` by an even number)
+@export var islet_center: Vector2 = Vector2(-410.0, 210.0)  ## World X, Z (metres)
+@export_range(0.05, 1.0) var islet_area: float = 0.3  ## Land area as a fraction of the main island's
+
 @export_group("Vegetation")
 @export var vegetation_enabled: bool = true
 @export var grass_enabled: bool = true
@@ -76,6 +83,7 @@ var water_height := PackedFloat32Array() # Water surface per vertex (normalised)
 var inland_mask := PackedFloat32Array()  # 1 where a lake or river covers the vertex
 var inland_flow := PackedVector2Array()  # Smoothed downstream direction x speed (0..1) per vertex
 var waterfalls: Array[Dictionary] = []   # {top (lip, metres), dir, drop, width} per fall, from water_carver.gd
+var islets: Array[Dictionary] = []       # {center (world X, Z), radius (metres)} per islet
 var size := 0                          # Vertices per side
 var rng := RandomNumberGenerator.new()
 
@@ -137,6 +145,10 @@ func generate() -> void:
 	if water_enabled and lake_and_river:
 		var result: String = WATER_CARVER.carve(self)
 		print("Carved " + result if result != "" else "No suitable lake site found")
+	islets.clear()
+	if islet and world_resolution > resolution:
+		_expand_world(world_resolution + 1)
+		_add_islet()
 
 
 func _load_baked(data: Resource) -> void:
@@ -178,6 +190,7 @@ func _load_baked(data: Resource) -> void:
 		water_height.resize(size * size)  # Bakes from before lakes and rivers: sea only
 		water_height.fill(water_level)
 	waterfalls.assign(data.get("waterfalls") if data.get("waterfalls") != null else [])
+	islets.assign(data.get("islets") if data.get("islets") != null else [])
 
 
 ## Height in metres at a world-space XZ position. Interpolates across the same
@@ -240,6 +253,17 @@ func water_current_at(world_x: float, world_z: float) -> Vector3:
 		return Vector3.ZERO
 	var f := inland_flow[grid_index(world_x, world_z)]
 	return Vector3(f.x, 0.0, f.y) * 1.5
+
+
+## 0..1: how much this position belongs to an islet (1 on it and its shallows, fading
+## out across the drop to open sea). Vegetation thins out there.
+func islet_weight(world_x: float, world_z: float) -> float:
+	var w := 0.0
+	for it in islets:
+		var c: Vector2 = it.center
+		var r: float = it.radius
+		w = maxf(w, 1.0 - smoothstep(1.4, 1.8, Vector2(world_x, world_z).distance_to(c) / r))
+	return w
 
 
 ## 0..1: how much a lake or river covers this position (0 for the sea and dry land).
@@ -386,6 +410,70 @@ func _shape_beaches() -> void:
 ## and always reaching full depth at the map border. The terrain mesh ends there, so if
 ## the water were still shallow it would turn from turquoise to deep blue in a straight
 ## line where the seabed stops.
+## Grows the world grid to `new_size` vertices per side, keeping everything generated so
+## far exactly as it is in the middle. The main island's grid ends in open-sea floor
+## (_sink_seabed), which carries on across the new area.
+func _expand_world(new_size: int) -> void:
+	assert((new_size - size) % 2 == 0, "world_resolution must exceed resolution by an even number")
+	var off := (new_size - size) / 2
+	var floor_h := heights[0]
+	var grown := {}
+	for pair in [["heights", floor_h], ["flow_map", 0.0], ["deposit_map", 0.0],
+			["water_height", water_level], ["inland_mask", 0.0], ["island_edge", 2.0]]:
+		var old: PackedFloat32Array = get(pair[0])
+		var map := PackedFloat32Array()
+		map.resize(new_size * new_size)
+		map.fill(pair[1])
+		if old.size() == size * size:
+			for z in size:
+				for x in size:
+					map[(z + off) * new_size + x + off] = old[z * size + x]
+		grown[pair[0]] = map
+	for key in grown:
+		set(key, grown[key])
+	size = new_size
+	resolution = new_size - 1
+
+
+## A small, low island at islet_center: a sandy plateau a couple of metres above the
+## sea with a few dunes (grass grows on the ones that rise above the sand line), a
+## ragged coastline, a ring of shallows, then a slope down to the open-sea floor.
+func _add_islet() -> void:
+	const PLATEAU = 1.9       # Metres above the sea, inland
+	const SHALLOWS = 2.0      # Depth at the edge of the shallow ring
+	var sea := water_level * max_height
+	var land := 0
+	for h in heights:
+		if h > water_level:
+			land += 1
+	var radius := sqrt(islet_area * land * cell_size * cell_size / PI)
+
+	var coast_noise := FastNoiseLite.new()
+	coast_noise.seed = terrain_seed + 2027
+	coast_noise.frequency = 0.008
+	var dune_noise := FastNoiseLite.new()
+	dune_noise.seed = terrain_seed + 2028
+	dune_noise.frequency = 0.035
+	var half := (size - 1) * 0.5
+	var c := islet_center / cell_size + Vector2(half, half)
+	var reach := int(radius * 2.2 / cell_size) + 2
+	for z in range(maxi(int(c.y) - reach, 0), mini(int(c.y) + reach + 1, size)):
+		for x in range(maxi(int(c.x) - reach, 0), mini(int(c.x) + reach + 1, size)):
+			var wx := (x - half) * cell_size
+			var wz := (z - half) * cell_size
+			var t := Vector2(x, z).distance_to(c) * cell_size / (radius * (1.0 + 0.15 * coast_noise.get_noise_2d(wx, wz)))
+			if t > 1.8:
+				continue
+			var above := PLATEAU * smoothstep(1.0, 0.6, t) - SHALLOWS * smoothstep(1.0, 1.35, t)
+			above += maxf(dune_noise.get_noise_2d(wx, wz) - 0.1, 0.0) * 6.0 * smoothstep(0.9, 0.5, t)
+			var i := z * size + x
+			var target := (sea + above) / max_height
+			heights[i] = maxf(heights[i], lerpf(target, heights[i], smoothstep(1.35, 1.8, t)))
+			deposit_map[i] = 0.0
+	islets.append({"center": islet_center, "radius": radius})
+	print("Added an islet at %s, %.0f m across" % [islet_center, radius * 2.0])
+
+
 func _sink_seabed() -> void:
 	const DROP = 30.0  # Metres
 	var half := (size - 1) * 0.5
@@ -555,12 +643,17 @@ func _build_terrain() -> void:
 			colors[i] = Color(flow_map[i], deposit_map[i], inland_mask[i])
 	normal_map = normals
 
+	# Seabed this deep is never seen through the water (it's fully the deep colour well
+	# before), so most of the open sea needs no terrain triangles
+	var hidden := (water_level * max_height - HIDDEN_SEABED_DEPTH) / max_height if water_enabled else -INF
 	var indices := PackedInt32Array()
 	indices.resize(resolution * resolution * 6)
 	var k := 0
 	for z in resolution:
 		for x in resolution:
 			var i := z * size + x
+			if maxf(maxf(heights[i], heights[i + 1]), maxf(heights[i + size], heights[i + size + 1])) < hidden:
+				continue
 			indices[k] = i
 			indices[k + 1] = i + 1
 			indices[k + 2] = i + size
@@ -568,6 +661,7 @@ func _build_terrain() -> void:
 			indices[k + 4] = i + size + 1
 			indices[k + 5] = i + size
 			k += 6
+	indices.resize(k)
 
 	var arrays := []
 	arrays.resize(Mesh.ARRAY_MAX)
