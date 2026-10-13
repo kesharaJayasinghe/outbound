@@ -37,3 +37,13 @@ func spend(cost: Dictionary) -> bool:
 			items[id] = count(id) - cost[id]
 		changed.emit()
 	return true
+
+
+## Gives a cost back, e.g. when a structure is taken down. Free builds cost nothing,
+## so nothing comes back.
+func refund(cost: Dictionary) -> void:
+	if free_build:
+		return
+	for id in cost:
+		items[id] = count(id) + cost[id]
+	changed.emit()

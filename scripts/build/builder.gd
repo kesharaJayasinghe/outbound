@@ -1,12 +1,14 @@
 extends Node
 
-## Crafting and placing structures. B opens the crafting menu; picking a recipe the
-## player can afford shows a see-through preview in front of them, green where it fits
-## and red where it doesn't (too uneven, in water, or blocked by a tree, rock or another
-## build). Click to build it, which spends the cost from the player's inventory.
-## On a slope the posts (meshes named Post*) stretch down to meet the ground.
-## Placed structures go under the generator's "Structures" node, with collision
-## generated from their meshes.
+## The interaction menu (M, like GTA Online's), crafting and placing structures.
+## Nothing is on screen until the menu is opened. It lists Craft, plus context actions
+## such as taking down the structure the player faces (highlighted only while that row
+## is selected). Picking a recipe the player can afford shows a see-through preview in
+## front of them, green where it fits and red where it doesn't (too uneven, in water, or
+## blocked by a tree, rock or another build). Click to build it, which spends the cost
+## from the player's inventory. On a slope the posts (meshes named Post*) stretch down
+## to meet the ground. Placed structures go under the generator's "Structures" node,
+## with collision generated from their meshes.
 
 const RECIPES = preload("res://scripts/build/recipes.gd")
 
@@ -18,8 +20,11 @@ const UPHILL_SINK = 0.25     # How far the structure may sink into the uphill si
 const POST_SINK = 0.15       # How far a stretched post goes into the ground
 const WATER_MARGIN = 0.1     # Ground must be this far above any water surface
 const ROTATE_STEP = deg_to_rad(15.0)
+const PAN_STEP = 1.0         # Two-finger trackpad scroll per menu / rotation step
 const VALID_COLOR = Color(0.35, 1.0, 0.45, 0.4)
 const INVALID_COLOR = Color(1.0, 0.3, 0.25, 0.4)
+const REMOVE_REACH = 6.0     # How far from the player a structure can be taken down
+const REMOVE_ANGLE = deg_to_rad(35.0)  # How directly the camera must face it
 
 enum Mode { IDLE, MENU, PLACING }
 
@@ -32,14 +37,26 @@ var ghost: Node3D
 var ghost_material := StandardMaterial3D.new()
 var ghost_xray := StandardMaterial3D.new()   # Faint pass that shows through grass and bushes
 var rotation_offset := 0.0
+var pan_accum := 0.0        # Trackpad scroll not yet turned into a step
 var placement := Transform3D()
 var placement_ok := false
 var structures: Node3D
 var collision_cache := {}   # recipe id -> [[Transform3D, Shape3D], ...]
+var highlighted: Node3D     # Structure tinted because its menu row is selected
+var highlight_overlay := StandardMaterial3D.new()
+
+## Interaction menu: the open page, its rows ({label, detail, action: Callable,
+## submenu, enabled, target}) and the selected row
+var menu_page := &"root"
+var menu_items: Array[Dictionary] = []
+var menu_index := 0
+var menu_target: Node3D     # Structure the root page's context actions apply to
 
 var hud: CanvasLayer
 var menu_panel: PanelContainer
-var menu_label: RichTextLabel
+var menu_title: Label
+var menu_rows: VBoxContainer
+var menu_detail: Label
 var hint_label: Label
 var status_label: Label
 var toast_time := 0.0
@@ -53,7 +70,7 @@ func setup(generator: Node3D, player_node: CharacterBody3D) -> void:
 	structures.name = "Structures"
 	gen.add_child(structures)
 
-	_ensure_action(&"build_menu", KEY_B)
+	_ensure_action(&"interaction_menu", KEY_M, JOY_BUTTON_TOUCHPAD)
 	_ensure_action(&"rotate_build", KEY_R)
 
 	ghost_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -64,45 +81,81 @@ func setup(generator: Node3D, player_node: CharacterBody3D) -> void:
 	ghost_xray.cull_mode = BaseMaterial3D.CULL_DISABLED
 	ghost_xray.no_depth_test = true
 	ghost_material.next_pass = ghost_xray
+	highlight_overlay.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	highlight_overlay.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	highlight_overlay.cull_mode = BaseMaterial3D.CULL_DISABLED
+	highlight_overlay.albedo_color = Color(1.0, 0.3, 0.2, 0.3)
 	_build_hud()
 
 
-## Default key for an input action, unless the project already defines it
-func _ensure_action(action: StringName, key: Key) -> void:
+## Default key (and controller button) for an input action, unless the project
+## already defines it
+func _ensure_action(action: StringName, key: Key, button := JOY_BUTTON_INVALID) -> void:
 	if InputMap.has_action(action):
 		return
 	InputMap.add_action(action)
 	var event := InputEventKey.new()
 	event.physical_keycode = key
 	InputMap.action_add_event(action, event)
+	if button != JOY_BUTTON_INVALID:
+		var pad := InputEventJoypadButton.new()
+		pad.button_index = button
+		InputMap.action_add_event(action, pad)
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if event.is_action_pressed(&"build_menu"):
-		_set_mode(Mode.MENU if mode == Mode.IDLE else Mode.IDLE)
+	if event.is_action_pressed(&"interaction_menu"):
+		if mode == Mode.MENU:
+			_set_mode(Mode.IDLE)
+		else:
+			_open_menu(&"root")
 		get_viewport().set_input_as_handled()
 		return
 	if mode == Mode.IDLE:
 		return
 
 	if event.is_action_pressed(&"ui_cancel"):
-		_set_mode(Mode.IDLE)  # Close instead of freeing the mouse
+		_back()  # Instead of freeing the mouse
 		get_viewport().set_input_as_handled()
 		return
 
+	var steps := _pan_steps(event) if event is InputEventPanGesture else 0
+	var click: bool = event is InputEventMouseButton and event.pressed \
+			and Input.get_mouse_mode() == Input.MOUSE_MODE_CAPTURED
 	if mode == Mode.MENU:
-		if event is InputEventKey and event.pressed and not event.echo:
-			var n: int = event.physical_keycode - KEY_1
-			if n >= 0 and n < RECIPES.RECIPES.size():
-				_choose(RECIPES.RECIPES[n])
-				get_viewport().set_input_as_handled()
+		if steps != 0:
+			_select(menu_index + steps)
+			get_viewport().set_input_as_handled()
+		elif click:
+			match event.button_index:
+				MOUSE_BUTTON_WHEEL_UP:
+					_select(menu_index - 1)
+				MOUSE_BUTTON_WHEEL_DOWN:
+					_select(menu_index + 1)
+				MOUSE_BUTTON_LEFT:
+					_activate()
+				MOUSE_BUTTON_RIGHT:
+					_back()
+				_:
+					return
+			get_viewport().set_input_as_handled()
+		elif event is InputEventKey and event.pressed and not event.echo:
+			match event.physical_keycode:
+				KEY_ENTER, KEY_KP_ENTER:
+					_activate()
+				KEY_BACKSPACE:
+					_back()
+				_:
+					return
+			get_viewport().set_input_as_handled()
 		return
 
 	# Placing
 	if event.is_action_pressed(&"rotate_build"):
 		rotation_offset += PI * 0.5
-	elif event is InputEventMouseButton and event.pressed \
-			and Input.get_mouse_mode() == Input.MOUSE_MODE_CAPTURED:
+	elif steps != 0:
+		rotation_offset -= steps * ROTATE_STEP  # Same direction as the mouse wheel
+	elif click:
 		match event.button_index:
 			MOUSE_BUTTON_WHEEL_UP:
 				rotation_offset += ROTATE_STEP
@@ -111,7 +164,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			MOUSE_BUTTON_LEFT:
 				_place()
 			MOUSE_BUTTON_RIGHT:
-				_set_mode(Mode.IDLE)
+				_back()
 			_:
 				return
 		get_viewport().set_input_as_handled()
@@ -120,6 +173,8 @@ func _unhandled_input(event: InputEvent) -> void:
 func _process(delta: float) -> void:
 	if mode == Mode.PLACING:
 		_update_placement()
+	elif mode == Mode.MENU and menu_page == &"root" and _aimed_structure() != menu_target:
+		_open_menu(&"root", menu_index)  # Walked up to or away from a structure
 	if toast_time > 0.0:
 		toast_time -= delta
 		if toast_time <= 0.0:
@@ -132,18 +187,35 @@ func _set_mode(new_mode: Mode) -> void:
 		ghost.queue_free()
 		ghost = null
 	menu_panel.visible = mode == Mode.MENU
-	if mode == Mode.MENU:
-		_refresh_menu()
-	match mode:
-		Mode.IDLE:
-			hint_label.text = "B  Craft"
-		Mode.MENU:
-			var n := RECIPES.RECIPES.size()
-			hint_label.text = ("1" if n == 1 else "1-%d" % n) + "  Choose · B  Close"
-		Mode.PLACING:
-			hint_label.text = "Click  Build · Wheel / R  Rotate · Right-click / B  Cancel"
+	if mode != Mode.MENU:
+		_highlight(null)
+	hint_label.text = "Click  Build · Scroll / R  Rotate · Right-click  Back" \
+			if mode == Mode.PLACING else ""
 	if mode != Mode.IDLE:
 		status_label.text = ""
+
+
+## Two-finger scrolling on a trackpad (macOS) arrives as pan gestures rather than
+## wheel clicks. Turns it into whole steps: +1 is like one click of the wheel down.
+## The pan delta is negated so swiping up moves up the menu, like scrolling a page.
+func _pan_steps(event: InputEventPanGesture) -> int:
+	var dy := -event.delta.y
+	if signf(dy) != signf(pan_accum):
+		pan_accum = 0.0  # Changed direction
+	pan_accum += dy
+	var steps := int(pan_accum / PAN_STEP)
+	pan_accum -= steps * PAN_STEP
+	return steps
+
+
+## One step back: placing -> craft page -> main page -> closed
+func _back() -> void:
+	if mode == Mode.PLACING:
+		_open_menu(&"craft")
+	elif mode == Mode.MENU and menu_page != &"root":
+		_open_menu(&"root")
+	else:
+		_set_mode(Mode.IDLE)
 
 
 func _choose(r: Dictionary) -> void:
@@ -247,6 +319,8 @@ func _place() -> void:
 	structures.add_child(building, true)
 	building.global_transform = placement
 
+	building.set_meta(&"recipe", recipe.id)
+
 	var body := StaticBody3D.new()
 	body.name = "StructureBody"
 	building.add_child(body)
@@ -315,6 +389,106 @@ func _relative_transform(node: Node, ancestor: Node) -> Transform3D:
 	return xf
 
 
+# --- Interaction menu ---------------------------------------------------------
+
+## Shows a menu page, rebuilding its rows from the current situation
+func _open_menu(page: StringName, index := 0) -> void:
+	menu_page = page
+	menu_items.clear()
+	match page:
+		&"root":
+			menu_title.text = "Interaction"
+			menu_items.append({"label": "Craft", "submenu": true,
+					"detail": "Make something from the resources you carry.",
+					"action": _open_menu.bind(&"craft")})
+			menu_target = _aimed_structure()
+			if menu_target:
+				var r := _recipe_of(menu_target)
+				menu_items.append({"label": "Take down " + r.get("name", "structure").to_lower(),
+						"detail": "Nothing to refund in free build." if inventory.free_build
+								else "Refunds " + RECIPES.describe_cost(r.get("cost", {})) + ".",
+						"action": _remove.bind(menu_target), "target": menu_target})
+		&"craft":
+			menu_title.text = "Craft"
+			for r: Dictionary in RECIPES.RECIPES:
+				var detail := RECIPES.describe_cost(r.cost)
+				if inventory.free_build:
+					detail += "\nFree build: resources aren't needed yet."
+				menu_items.append({"label": r.name, "detail": detail,
+						"action": _choose.bind(r), "enabled": inventory.can_afford(r.cost)})
+	_set_mode(Mode.MENU)
+	_select(index)
+
+
+func _select(index: int) -> void:
+	menu_index = clampi(index, 0, menu_items.size() - 1)
+	for child in menu_rows.get_children():
+		menu_rows.remove_child(child)
+		child.queue_free()
+	for i in menu_items.size():
+		var item: Dictionary = menu_items[i]
+		menu_rows.add_child(_menu_row(item, i == menu_index))
+	var selected: Dictionary = menu_items[menu_index]
+	menu_detail.text = selected.get("detail", "")
+	_highlight(selected.get("target"))
+
+
+func _activate() -> void:
+	var item: Dictionary = menu_items[menu_index]
+	if item.get("enabled", true):
+		item.action.call()
+
+
+## Tints a structure so it's clear which one a menu row applies to (null clears it)
+func _highlight(target: Node3D) -> void:
+	if target == highlighted:
+		return
+	for building in [highlighted, target]:
+		if building == null or not is_instance_valid(building):
+			continue
+		for mi: MeshInstance3D in building.find_children("*", "MeshInstance3D", true, false):
+			mi.material_overlay = highlight_overlay if building == target else null
+	highlighted = target
+
+
+## The placed structure within reach that the camera faces most directly (within
+## REMOVE_ANGLE), or the one the player is standing in
+func _aimed_structure() -> Node3D:
+	var cam: Camera3D = player.camera
+	var forward := -cam.global_basis.z
+	forward = Vector3(forward.x, 0.0, forward.z).normalized()
+	var best: Node3D = null
+	var best_angle := REMOVE_ANGLE
+	for building: Node3D in structures.get_children():
+		if building.is_queued_for_deletion():
+			continue
+		var to := building.global_position - player.global_position
+		to.y = 0.0
+		var distance := to.length()
+		if distance > REMOVE_REACH:
+			continue
+		var angle: float = 0.0 if distance < 2.0 else forward.angle_to(to / distance)
+		if angle < best_angle:
+			best_angle = angle
+			best = building
+	return best
+
+
+func _recipe_of(building: Node3D) -> Dictionary:
+	for r: Dictionary in RECIPES.RECIPES:
+		if r.id == building.get_meta(&"recipe", &""):
+			return r
+	return {}
+
+
+func _remove(building: Node3D) -> void:
+	var r := _recipe_of(building)
+	inventory.refund(r.get("cost", {}))
+	_set_mode(Mode.IDLE)
+	building.queue_free()
+	_toast("Took down the %s" % r.get("name", "structure").to_lower())
+
+
 # --- HUD ---------------------------------------------------------------------
 
 func _build_hud() -> void:
@@ -330,14 +504,28 @@ func _build_hud() -> void:
 	menu_panel = PanelContainer.new()
 	menu_panel.add_theme_stylebox_override("panel", style)
 	menu_panel.position = Vector2(24, 24)
-	menu_panel.custom_minimum_size = Vector2(340, 0)
+	menu_panel.custom_minimum_size = Vector2(320, 0)
 	menu_panel.visible = false
 	hud.add_child(menu_panel)
-	menu_label = RichTextLabel.new()
-	menu_label.bbcode_enabled = true
-	menu_label.fit_content = true
-	menu_label.scroll_active = false
-	menu_panel.add_child(menu_label)
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 6)
+	menu_panel.add_child(column)
+	menu_title = _hud_label(Color(1, 1, 1))
+	menu_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	menu_title.add_theme_font_size_override("font_size", 20)
+	column.add_child(menu_title)
+	menu_rows = VBoxContainer.new()
+	menu_rows.add_theme_constant_override("separation", 2)
+	column.add_child(menu_rows)
+	menu_detail = _hud_label(Color(1, 1, 1, 0.65))
+	menu_detail.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	menu_detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	column.add_child(menu_detail)
+	var help := _hud_label(Color(1, 1, 1, 0.4))
+	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	help.add_theme_font_size_override("font_size", 12)
+	help.text = "Scroll  Select · Click  OK · Right-click  Back · M  Close"
+	column.add_child(help)
 
 	var bottom := VBoxContainer.new()
 	bottom.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
@@ -363,17 +551,33 @@ func _hud_label(color: Color) -> Label:
 	return label
 
 
-func _refresh_menu() -> void:
-	var text := "[b]Crafting[/b]"
-	if inventory.free_build:
-		text += "  [color=#9c9]free build: resources aren't needed yet[/color]"
-	text += "\n"
-	for i in RECIPES.RECIPES.size():
-		var r: Dictionary = RECIPES.RECIPES[i]
-		var affordable: bool = inventory.can_afford(r.cost)
-		text += "\n[color=%s][b]%d[/b]  %s[/color]\n    [color=#bbb]%s[/color]" % [
-			"#fff" if affordable else "#888", i + 1, r.name, RECIPES.describe_cost(r.cost)]
-	menu_label.text = text
+## One menu row: inverted colours when selected, greyed out when unavailable
+func _menu_row(item: Dictionary, selected: bool) -> PanelContainer:
+	var row := PanelContainer.new()
+	var bg := StyleBoxFlat.new()
+	bg.bg_color = Color(1, 1, 1, 0.92) if selected else Color(1, 1, 1, 0.06)
+	bg.set_corner_radius_all(3)
+	bg.content_margin_left = 10
+	bg.content_margin_right = 10
+	bg.content_margin_top = 4
+	bg.content_margin_bottom = 4
+	row.add_theme_stylebox_override("panel", bg)
+	var line := HBoxContainer.new()
+	row.add_child(line)
+	var color := Color(0.08, 0.1, 0.09) if selected else Color(1, 1, 1)
+	if not item.get("enabled", true):
+		color.a = 0.4
+	var label := Label.new()
+	label.text = item.label
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	label.add_theme_color_override("font_color", color)
+	line.add_child(label)
+	if item.get("submenu", false):
+		var arrow := Label.new()
+		arrow.text = "›"
+		arrow.add_theme_color_override("font_color", color)
+		line.add_child(arrow)
+	return row
 
 
 func _toast(message: String) -> void:
