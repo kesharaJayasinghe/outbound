@@ -19,6 +19,8 @@ island with eroded mountains, beaches, jungle, wildlife ambience and a swimmable
 - **Waterfall**: a second stream leaves the lake westward through a rocky gorge and plunges
   27 m off the western cliffs into the lagoon, with mist and foam at the base and a roar you
   can hear from the beach.
+- **Secret grotto**: swim in behind the waterfall's curtain to a hidden ledge, and a tunnel
+  leads into a chamber of softly glowing crystals around a still pool.
 - **Islet**: a small, low, sandy island (0.3× the main island's area) across ~160 m of
   deep sea to the west-south-west, with a few palms and grassy dunes. Its beach looks
   straight at the waterfall.
@@ -106,7 +108,7 @@ These settings apply when generating or baking an island:
 | Shape | Resolution, cell size, max height, seed (0 = random), island mode |
 | Erosion | Droplet count (more droplets carve deeper gullies but generate more slowly), brush radius |
 | Water | Water level, beach flatness, beach height |
-| Lake and River | Toggle, lake radius and depth, river width and depth, waterfall toggle and bearing |
+| Lake and River | Toggle, lake radius and depth, river width and depth, waterfall toggle and bearing, grotto behind the waterfall |
 | Islet | Toggle, whole-world grid size, islet centre, islet area (fraction of the main island's) |
 | Vegetation | Toggles for vegetation and grass; tree, bush and rock density |
 | Audio | Toggle for the ambient soundscape |

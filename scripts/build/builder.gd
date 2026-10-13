@@ -288,7 +288,9 @@ func _update_placement() -> void:
 	_fit_posts(ghost, false)
 
 	var problem := ""
-	if wet:
+	if gen.is_underground(player.global_position):
+		problem = "Can't build in here"
+	elif wet:
 		problem = "Can't build in the water"
 	elif hi - lo > MAX_UNEVENNESS:
 		problem = "The ground is too uneven here"

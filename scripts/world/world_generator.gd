@@ -13,6 +13,7 @@ const WATER_CARVER = preload("res://scripts/world/water_carver.gd")
 const VEGETATION = preload("res://scripts/world/vegetation.gd")
 const AMBIENT_AUDIO = preload("res://scripts/world/ambient_audio.gd")
 const WATERFALL = preload("res://scripts/world/waterfall.gd")
+const CAVE = preload("res://scripts/world/cave.gd")
 const HIDDEN_SEABED_DEPTH = 24.0  # Seabed deeper than this (metres) is left out of the terrain mesh
 const WATERFALL_STEP = 3.0  # Water surface drop across one cell (metres) that counts as a waterfall
 const BUILDER = preload("res://scripts/build/builder.gd")
@@ -46,6 +47,7 @@ const BUILDER = preload("res://scripts/build/builder.gd")
 @export var river_width: float = 7.0       ## Metres near the lake; widens downstream
 @export var river_depth: float = 1.1       ## Metres at the centre near the lake; deepens downstream
 @export var waterfall: bool = true         ## A second river from the lake, over a cliff as a waterfall
+@export var waterfall_cave: bool = true    ## A hidden grotto behind the waterfall, reached from a ledge behind the curtain
 @export_range(0.0, 360.0) var waterfall_bearing: float = 270.0  ## Compass direction from the lake to look for a cliff (0 = north/-Z, 90 = east/+X)
 
 @export_group("Islet")
@@ -84,6 +86,8 @@ var inland_mask := PackedFloat32Array()  # 1 where a lake or river covers the ve
 var inland_flow := PackedVector2Array()  # Smoothed downstream direction x speed (0..1) per vertex
 var waterfalls: Array[Dictionary] = []   # {top (lip, metres), dir, drop, width} per fall, from water_carver.gd
 var islets: Array[Dictionary] = []       # {center (world X, Z), radius (metres)} per islet
+var caves: Array[Dictionary] = []        # Cave layouts (cave.gd), behind waterfalls that have one
+var terrain_material: ShaderMaterial
 var size := 0                          # Vertices per side
 var rng := RandomNumberGenerator.new()
 
@@ -95,11 +99,16 @@ func _ready() -> void:
 	else:
 		generate()
 	_compute_inland_flow()
+	caves.clear()
+	for fall in waterfalls:
+		if fall.get("cave", false):
+			caves.append(CAVE.layout(self, fall))
 	_build_terrain()
 	if water_enabled:
 		_build_water()
 		_build_inland_water()
 		_build_waterfalls()
+	_build_caves()
 	_place_player()
 	print("Terrain %s in %d ms" % ["loaded" if baked_island else "generated", Time.get_ticks_msec() - t])
 	var vegetation: Node3D = null
@@ -213,7 +222,7 @@ func grid_index(world_x: float, world_z: float) -> int:
 ## Ground type at a position, for footstep sounds: &"sand", &"stone" or &"grass".
 ## `floor_collider` is what the character is standing on (boulders count as stone).
 func surface_at(pos: Vector3, floor_collider: Object = null) -> StringName:
-	if floor_collider is StaticBody3D and floor_collider.name == &"VegetationBody":
+	if floor_collider is StaticBody3D and floor_collider.name in [&"VegetationBody", &"CaveBody"]:
 		return &"stone"
 	var i := grid_index(pos.x, pos.z)
 	if water_enabled and heights[i] < water_level + beach_height / max_height:
@@ -239,9 +248,10 @@ func water_surface_at(world_x: float, world_z: float) -> float:
 	return _sample_map(water_height, gx, gz) * max_height
 
 
-## How deep the water is above a point, in metres (0 on dry land or with water off).
+## How deep the water is above a point, in metres (0 on dry land or with water off,
+## and underground, e.g. in a cave beneath a river).
 func water_depth_at(pos: Vector3) -> float:
-	if not water_enabled:
+	if not water_enabled or is_underground(pos):
 		return 0.0
 	return maxf(water_surface_at(pos.x, pos.z) - pos.y, 0.0)
 
@@ -253,6 +263,11 @@ func water_current_at(world_x: float, world_z: float) -> Vector3:
 		return Vector3.ZERO
 	var f := inland_flow[grid_index(world_x, world_z)]
 	return Vector3(f.x, 0.0, f.y) * 1.5
+
+
+## True below the terrain surface: inside a cave.
+func is_underground(pos: Vector3) -> bool:
+	return pos.y < get_height(pos.x, pos.z) - 1.0
 
 
 ## 0..1: how much this position belongs to an islet (1 on it and its shallows, fading
@@ -654,6 +669,8 @@ func _build_terrain() -> void:
 			var i := z * size + x
 			if maxf(maxf(heights[i], heights[i + 1]), maxf(heights[i + size], heights[i + size + 1])) < hidden:
 				continue
+			if _in_cave_box(x, z):
+				continue  # The cave's own mesh takes over here
 			indices[k] = i
 			indices[k + 1] = i + 1
 			indices[k + 2] = i + size
@@ -679,6 +696,7 @@ func _build_terrain() -> void:
 	mat.set_shader_parameter("water_level", water_level * max_height if water_enabled else -1000.0)
 	mat.set_shader_parameter("beach_height", beach_height)
 
+	terrain_material = mat
 	var mesh_instance := MeshInstance3D.new()
 	mesh_instance.name = "TerrainMesh"
 	mesh_instance.mesh = mesh
@@ -695,6 +713,12 @@ func _build_terrain() -> void:
 	col_heights.resize(count)
 	for i in count:
 		col_heights[i] = heights[i] * max_height / cell_size
+	# Holes where caves replace the terrain (NaN vertices drop every cell touching them)
+	for c in caves:
+		var box: Rect2i = c.box
+		for z in range(box.position.y + 1, box.end.y):
+			for x in range(box.position.x + 1, box.end.x):
+				col_heights[z * size + x] = NAN
 	shape.map_data = col_heights
 
 	var static_body := StaticBody3D.new()
@@ -822,6 +846,24 @@ func _build_inland_water() -> void:
 	water.material_override = mat
 	water.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(water)
+
+
+## Whether a terrain cell (by its corner vertex) is replaced by a cave's mesh
+func _in_cave_box(x: int, z: int) -> bool:
+	for c in caves:
+		if (c.box as Rect2i).has_point(Vector2i(x, z)):
+			return true
+	return false
+
+
+func _build_caves() -> void:
+	for c in caves:
+		var t := Time.get_ticks_msec()
+		var node := CAVE.new()
+		node.name = "Cave"
+		add_child(node, true)
+		node.build(self, c, terrain_material)
+		print("Cave built in %d ms" % (Time.get_ticks_msec() - t))
 
 
 func _build_waterfalls() -> void:

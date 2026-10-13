@@ -259,6 +259,8 @@ func _update_swim_state() -> void:
 	if surface == -INF or not world.has_method("get_height"):
 		swimming = false
 		return
+	if world.has_method("is_underground") and world.is_underground(global_position):
+		surface = -INF  # In a cave: any river is overhead, not around us
 	var bed_depth: float = surface - world.get_height(global_position.x, global_position.z)
 	if not swimming and bed_depth > SWIM_ENTER_DEPTH and global_position.y < surface - SWIM_EXIT_DEPTH:
 		swimming = true

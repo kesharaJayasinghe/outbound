@@ -53,7 +53,8 @@ the middle) and adds the islet (`_add_islet`):
    level outside the lake and river) and `inland_mask`. With `waterfall` on, a second outlet
    heads along `waterfall_bearing` (±30°, scored by drop and steepness): a gorge to a sheer
    lip, a plunge pool (or the sea, if the cliff foot is at sea level) and on to the sea. The
-   falls go in `gen.waterfalls` ({top, dir, drop, width}).
+   falls go in `gen.waterfalls` ({top, dir, drop, width, cave, ledge}). With `waterfall_cave`,
+   it also raises a ledge in the heightmap behind the curtain.
    Channels share `_profile` and `_carve_channel` (with a `keep` filter, used to leave a
    vertical face at the lip).
 4. `_build_terrain`: mesh with analytic normals (`normal_map`) + `HeightMapShape3D`
@@ -81,6 +82,16 @@ water surface drops more than `WATERFALL_STEP` are left out: `waterfall.gd` draw
 there (a ballistic curtain mesh with `waterfall.gdshader`, foam on the pool, mist
 particles, and the river-rush loop pitched down as the roar).
 
+- `cave.gd`: the grotto behind a waterfall. The heightmap can't hold a cave, so `layout()`
+  picks a box of terrain cells that `_build_terrain` leaves out (mesh quads skipped,
+  collision vertices set to NaN, which Jolt treats as holes). `build()` fills the box from a
+  signed distance field (under the heightmap, minus tunnel and chamber) meshed with
+  surface nets. Outside the cave the vertices sit exactly on the heightmap, using its normals
+  and snapped to the box sides, so there are no seams. It reuses the terrain material:
+  COLOR.a < 0.99 marks cave rock (no grass) and fades ambient light (AO) with depth.
+  `gen.is_underground(pos)` (below the heightmap) makes `water_depth_at` return 0 and stops
+  swimming in caves under rivers. Footsteps on `CaveBody` are stone, and you can't build
+  underground.
 - `vegetation.gd`: jittered-grid scattering into MultiMeshes chunked every `CHUNK_SIZE` m (a
   fixed size, so culling doesn't degrade on a bigger world), plus one shared
   `StaticBody3D` with shape owners for collision. Grass is a camera-following GPU field:

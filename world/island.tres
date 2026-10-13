@@ -16,12 +16,14 @@ water_level = 0.08
 terrain_seed = 71195
 rng_state = 3496353382628215189
 waterfalls = Array[Dictionary]([{
+"cave": true,
 "dir": Vector3(-0.9945219, 0, 0.104528464),
 "drop": 27.45621566772461,
+"ledge": 7.65,
 "top": Vector3(-163.4741, 34.656216, 46.03473),
 "width": 5.6000000000000005
 }])
 islets = Array[Dictionary]([{
 "center": Vector2(-410, 210),
-"radius": 99.37939676110794
+"radius": 99.39861276313626
 }])

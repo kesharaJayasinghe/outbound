@@ -25,6 +25,8 @@ varying vec3 world_pos;
 varying vec3 world_normal;
 varying vec2 erosion; // x = drainage flow, y = sediment deposit
 varying float inland; // 1 under a lake or river
+varying float ambient; // 1 in the open; less inside caves (cave.gd), where sky light can't reach
+varying float cave;    // 1 on a cave's own rock (COLOR.a < 0.99): no grass there
 
 float hash(vec2 p) {
 	vec3 p3 = fract(vec3(p.xyx) * 0.1031);
@@ -57,6 +59,8 @@ void vertex() {
 	world_normal = normalize((MODEL_MATRIX * vec4(NORMAL, 0.0)).xyz);
 	erosion = COLOR.rg;
 	inland = COLOR.b;
+	cave = 1.0 - step(0.99, COLOR.a);
+	ambient = mix(1.0, COLOR.a / 0.98, cave);
 }
 
 void fragment() {
@@ -95,6 +99,9 @@ void fragment() {
 	float strata = sin(h * 1.3 + fbm(xz * 0.02, 3) * 8.0) * 0.5 + 0.5;
 	vec3 rock = mix(rock_dark, rock_light, clamp(strata * 0.6 + fine * 0.5 + (macro - 0.5) * 0.4, 0.0, 1.0));
 	col = mix(col, rock, rock_t);
+	// Caves: bare rock, except the floor (sandy where it's low, from the beach rule below)
+	rock_t = max(rock_t, cave * (1.0 - smoothstep(0.6, 0.85, n.y)));
+	col = mix(col, rock, cave);
 
 	// --- Sandy / muddy shoreline just above the water
 	// Ragged line where the sand gives way to grass
@@ -136,4 +143,5 @@ void fragment() {
 	rough = mix(rough, 0.5, wet);
 	ROUGHNESS = rough;
 	SPECULAR = 0.3;
+	AO = ambient;
 }

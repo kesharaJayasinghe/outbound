@@ -28,6 +28,10 @@ const POOL_RADIUS = 7.0       # Plunge pool (metres)
 const POOL_DEPTH = 3.0
 const POOL_OFFSET = 4.5       # Pool centre out from the lip, where the falling water lands
 const SEA_POOL_MARGIN = 1.2   # A pool less than this far above the sea becomes part of it
+const LEDGE_ABOVE_WATER = 0.45  # Ledge behind a fall with a cave (metres above the pool)
+const LEDGE_HALF_WIDTH = 4.0    # Kept within the curtain's width, so it's hidden from the sea
+const LEDGE_FLAT = 2.5          # Flat part out from the cliff face...
+const LEDGE_RAMP = 3.5          # ...then it slopes down into the pool, to wade out on
 
 
 ## Returns a short description of what was carved, or "" if no lake site was found.
@@ -345,12 +349,31 @@ static func _carve_waterfall_river(g: Grid, gen: Node3D, c: Vector2, lake_level:
 	_carve_channel(g, upper, s, Vector2(1.0, 1.0) * half_w, Vector2(1.0, 0.6) * gen.river_depth,
 			GORGE_BANKS, behind)
 
+	# A ledge behind the curtain, at the foot of the cliff, for the cave (cave.gd)
+	var ledge_level := pool_level + LEDGE_ABOVE_WATER
+	if gen.waterfall_cave:
+		var side := Vector2(-dir.y, dir.x)
+		var r := int((LEDGE_FLAT + LEDGE_RAMP + LEDGE_HALF_WIDTH + 4.0) / cell)
+		for z in range(maxi(int(lip.y) - r, 0), mini(int(lip.y) + r + 1, g.size)):
+			for x in range(maxi(int(lip.x) - r, 0), mini(int(lip.x) + r + 1, g.size)):
+				var p := Vector2(x, z)
+				var a := (p - lip).dot(dir) * cell   # Metres out from the face
+				var across := absf((p - lip).dot(side)) * cell
+				if not in_front.call(p) or a > LEDGE_FLAT + LEDGE_RAMP + 1.0 or across > LEDGE_HALF_WIDTH + 2.0:
+					continue
+				var top := lerpf(ledge_level, pool_level - 1.6, smoothstep(LEDGE_FLAT, LEDGE_FLAT + LEDGE_RAMP, a))
+				var i := z * g.size + x
+				var raised := maxf(g.h[i], top)
+				g.h[i] = lerpf(g.h[i], raised, smoothstep(LEDGE_HALF_WIDTH + 2.0, LEDGE_HALF_WIDTH, across))
+
 	var half := (g.size - 1) * 0.5
 	return {
 		"top": Vector3((lip.x - half) * cell, lip_level, (lip.y - half) * cell),
 		"dir": Vector3(dir.x, 0.0, dir.y),
 		"drop": lip_level - pool_level,
 		"width": half_w * 2.0,
+		"cave": gen.waterfall_cave,
+		"ledge": ledge_level,
 	}
 
 
