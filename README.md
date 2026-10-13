@@ -33,9 +33,12 @@ island with eroded mountains, beaches, jungle, wildlife ambience and a swimmable
   level enough. A preview shows green where it fits and red where it doesn't. On a slope the
   downhill posts stretch to reach the ground. Gathering isn't in yet, so building is free for
   now.
-- **Interaction menu** (M), like GTA Online's: Craft, plus actions for what's in front of
+- **Interaction menu** (M), like GTA Online's: Map, Craft, plus actions for what's in front of
   you, such as taking down a shelter you face, which refunds its cost. Nothing is on screen
   until you open it.
+- **Map**: a shaded map of the island with contour lines, rivers, your position and facing,
+  and your shelters, plus your coordinates, elevation and compass bearing. The game pauses
+  while it's open; scroll to zoom in around you.
 
 ## Running
 

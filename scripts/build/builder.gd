@@ -1,7 +1,7 @@
 extends Node
 
 ## The interaction menu (M, like GTA Online's), crafting and placing structures.
-## Nothing is on screen until the menu is opened. It lists Craft, plus context actions
+## Nothing is on screen until the menu is opened. It lists Map and Craft, plus context actions
 ## such as taking down the structure the player faces (highlighted only while that row
 ## is selected). Picking a recipe the player can afford shows a see-through preview in
 ## front of them, green where it fits and red where it doesn't (too uneven, in water, or
@@ -11,6 +11,7 @@ extends Node
 ## with collision generated from their meshes.
 
 const RECIPES = preload("res://scripts/build/recipes.gd")
+const MAP_VIEW = preload("res://scripts/ui/map_view.gd")
 
 const MIN_DISTANCE = 3.5     # Closest the preview's centre gets to the player (metres)
 const MAX_DISTANCE = 9.0     # Furthest away the player can build
@@ -53,6 +54,7 @@ var menu_index := 0
 var menu_target: Node3D     # Structure the root page's context actions apply to
 
 var hud: CanvasLayer
+var map_view: CanvasLayer
 var menu_panel: PanelContainer
 var menu_title: Label
 var menu_rows: VBoxContainer
@@ -86,6 +88,10 @@ func setup(generator: Node3D, player_node: CharacterBody3D) -> void:
 	highlight_overlay.cull_mode = BaseMaterial3D.CULL_DISABLED
 	highlight_overlay.albedo_color = Color(1.0, 0.3, 0.2, 0.3)
 	_build_hud()
+	map_view = MAP_VIEW.new()
+	map_view.name = "MapView"
+	add_child(map_view)
+	map_view.setup(gen, player, structures)
 
 
 ## Default key (and controller button) for an input action, unless the project
@@ -398,6 +404,8 @@ func _open_menu(page: StringName, index := 0) -> void:
 	match page:
 		&"root":
 			menu_title.text = "Interaction"
+			menu_items.append({"label": "Map", "detail": "See the island and where you are.",
+					"action": _open_map})
 			menu_items.append({"label": "Craft", "submenu": true,
 					"detail": "Make something from the resources you carry.",
 					"action": _open_menu.bind(&"craft")})
@@ -437,6 +445,11 @@ func _activate() -> void:
 	var item: Dictionary = menu_items[menu_index]
 	if item.get("enabled", true):
 		item.action.call()
+
+
+func _open_map() -> void:
+	_set_mode(Mode.IDLE)
+	map_view.open()
 
 
 ## Tints a structure so it's clear which one a menu row applies to (null clears it)

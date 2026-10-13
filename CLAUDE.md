@@ -96,6 +96,10 @@ particles, and the river-rush loop pitched down as the roar).
   meshes (skipping `Lash*`). Placed builds go under `Structures` (with a `recipe` meta) and
   aren't saved yet. The menu's "Take down" row removes the build the camera faces and
   refunds it.
+- `scripts/ui/map_view.gd`: the map (opened from the interaction menu). Packs heights, the
+  inland mask and water heights into a float texture for `shaders/map.gdshader`, which does
+  the colouring, hill shading and contours; markers are drawn on a Control on top. It pauses
+  the tree while open, so it runs with `PROCESS_MODE_ALWAYS`.
 - `scripts/player/player.gd`: CharacterBody3D controller, an AnimationTree built in code
   (ground/air/swim transition), footsteps and splashes, swimming. `footprints.gd` holds a pooled,
   fading Decal trail that sand steps leave behind. Swimming plays two hand-keyed clips
