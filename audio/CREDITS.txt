@@ -28,3 +28,8 @@ footsteps/water_land_3.wav
   "Water Splash and sand footsteps" by Peludo (splash2.wav)
   https://opengameart.org/content/water-splash-and-sand-footsteps
   Leading silence trimmed, shortened with a fade-out, loudness-normalised.
+
+footsteps/sand_l1-6.wav, footsteps/sand_r1-6.wav
+  "Water Splash and sand footsteps" by Peludo (sand_footsteps.mp3, recorded on a beach)
+  https://opengameart.org/content/water-splash-and-sand-footsteps
+  Sliced into 12 single steps (first step dropped), short fade-outs, loudness-normalised.

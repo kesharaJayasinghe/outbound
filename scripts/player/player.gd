@@ -27,7 +27,7 @@ const ANIM_WALK = "Human Armature|Walk"
 const ANIM_RUN = "Human Armature|Run"
 const ANIM_JUMP = "Human Armature|Jump"
 
-# Footsteps, ordered left 1-3 then right 1-3
+# Footsteps: each set lists its left-foot sounds first, then the same number of right-foot sounds
 const SOFT_STEPS = [
 	preload("res://audio/footsteps/soft_l1.wav"), preload("res://audio/footsteps/soft_l2.wav"),
 	preload("res://audio/footsteps/soft_l3.wav"), preload("res://audio/footsteps/soft_r1.wav"),
@@ -37,6 +37,14 @@ const STONE_STEPS = [
 	preload("res://audio/footsteps/stone_l1.wav"), preload("res://audio/footsteps/stone_l2.wav"),
 	preload("res://audio/footsteps/stone_l3.wav"), preload("res://audio/footsteps/stone_r1.wav"),
 	preload("res://audio/footsteps/stone_r2.wav"), preload("res://audio/footsteps/stone_r3.wav"),
+]
+const SAND_STEPS = [
+	preload("res://audio/footsteps/sand_l1.wav"), preload("res://audio/footsteps/sand_l2.wav"),
+	preload("res://audio/footsteps/sand_l3.wav"), preload("res://audio/footsteps/sand_l4.wav"),
+	preload("res://audio/footsteps/sand_l5.wav"), preload("res://audio/footsteps/sand_l6.wav"),
+	preload("res://audio/footsteps/sand_r1.wav"), preload("res://audio/footsteps/sand_r2.wav"),
+	preload("res://audio/footsteps/sand_r3.wav"), preload("res://audio/footsteps/sand_r4.wav"),
+	preload("res://audio/footsteps/sand_r5.wav"), preload("res://audio/footsteps/sand_r6.wav"),
 ]
 const WATER_STEPS = [
 	preload("res://audio/footsteps/water_1.wav"), preload("res://audio/footsteps/water_2.wav"),
@@ -72,6 +80,7 @@ var left_foot := true
 var was_on_floor := true
 var was_in_water := false
 var last_splash: AudioStream
+var last_step: Array[AudioStream] = [null, null]  # Per foot, to avoid immediate repeats
 var feet: Array[AudioStreamPlayer3D] = []
 var swimming := false
 var swim_blend := 0.0   # 0 = on foot, 1 = fully in the swimming pose
@@ -334,16 +343,26 @@ func _play_step(intensity: float, landing: bool) -> void:
 	var surface := &"grass"
 	if world and world.has_method("surface_at"):
 		surface = world.surface_at(global_position, _floor_collider())
-	var pool: Array = STONE_STEPS if surface == &"stone" else SOFT_STEPS
+	var pool: Array = SOFT_STEPS
+	if surface == &"stone":
+		pool = STONE_STEPS
+	elif surface == &"sand":
+		pool = SAND_STEPS
+	var half := pool.size() / 2
 	# Landing hits with both feet; otherwise alternate left and right
-	var sides := [0, 3] if landing else [0 if left_foot else 3]
+	var sides := [0, 1] if landing else [0 if left_foot else 1]
 	left_foot = not left_foot
 	for side in sides:
-		var foot := feet[0 if side == 0 else 1]
-		foot.stream = pool[side + randi() % 3]
-		# Grass is the "soft" recording, pitched down and quieter than sand
+		var foot := feet[side]
+		var stream: AudioStream = pool[side * half + randi() % half]
+		if stream == last_step[side]:
+			stream = pool[side * half + (pool.find(stream) - side * half + 1 + randi() % (half - 1)) % half]
+		last_step[side] = stream
+		foot.stream = stream
+		# Grass uses the "soft" recording, pitched down and quieter
 		foot.pitch_scale = randf_range(0.92, 1.08) * (0.88 if surface == &"grass" else 1.0)
-		foot.volume_db = linear_to_db(intensity) + (-5.0 if surface == &"grass" else 0.0) + (2.0 if landing else 0.0)
+		foot.volume_db = linear_to_db(intensity) + (-5.0 if surface == &"grass" else -1.0 if surface == &"sand" else 0.0) \
+				+ (2.0 if landing else 0.0)
 		foot.play()
 
 
