@@ -1,0 +1,15 @@
+[gd_resource type="Resource" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/world/island_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://world/island_height.exr" id="2_height"]
+[ext_resource type="Texture2D" path="res://world/island_masks.exr" id="3_masks"]
+
+[resource]
+script = ExtResource("1_data")
+heightmap = ExtResource("2_height")
+masks = ExtResource("3_masks")
+cell_size = 2.0
+max_height = 90.0
+water_level = 0.08
+terrain_seed = 71195
+rng_state = 3496353382628215189

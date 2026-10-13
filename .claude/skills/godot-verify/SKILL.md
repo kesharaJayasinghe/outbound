@@ -27,6 +27,9 @@ $GODOT --path . --audio-driver Dummy --resolution 1280x720 \
   --script res://tools/screenshot.gd -- --out=<scratch dir> --seed=12345 --views=player,overview,beach,peak
 ```
 
+- Without `--seed` it shows the **baked** island in `world/`, which is what the game ships.
+  With `--seed` it generates that seed instead. Use that to preview generator changes, which
+  don't affect the game until someone re-bakes with `tools/bake_island.gd`.
 - Prints generation times, then `fps`, `draw_calls` and `primitives` per view. The first views
   read low FPS while shaders warm up.
 - Read the PNGs to judge the result. For before/after comparisons, render both with the same
@@ -57,6 +60,8 @@ func _physics_process(_d: float) -> bool:
 ```
 
 - The world's `_ready` runs after `_initialize`, so query terrain on a later frame.
+- The scene loads the baked island. To test generator code, set `world.baked_island = null`
+  (and a `terrain_seed`) before `add_child`.
 - Simulate input with `Input.action_press/release`, or `Input.parse_input_event` for
   `is_action_pressed` events such as `toggle_view`.
 - Set the camera direction with `p.camera_rig.rotation.y` (movement is camera-relative).

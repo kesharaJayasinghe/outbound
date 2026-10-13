@@ -7,6 +7,9 @@ extends SceneTree
 ##   godot --path . --audio-driver Dummy --resolution 1280x720 \
 ##       --script res://tools/screenshot.gd -- --out=/tmp/shots [--seed=12345] [--views=player,overview,beach,peak]
 ##
+## By default it shows the baked island the game loads. --seed generates that seed
+## instead (use it to preview generator changes before re-baking).
+##
 ## Views:
 ##   player    the player's own third-person camera
 ##   overview  high above the island
@@ -36,6 +39,7 @@ func _initialize() -> void:
 
 	world = load(ProjectSettings.get_setting("application/run/main_scene")).instantiate()
 	if seed_arg != 0:
+		world.baked_island = null
 		world.terrain_seed = seed_arg
 	root.add_child(world)
 	cam = Camera3D.new()

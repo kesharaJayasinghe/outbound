@@ -10,11 +10,16 @@ const WATER_SHADER = preload("res://shaders/water.gdshader")
 const VEGETATION = preload("res://scripts/world/vegetation.gd")
 const AMBIENT_AUDIO = preload("res://scripts/world/ambient_audio.gd")
 
+## Load this baked island (see tools/bake_island.gd) instead of generating one.
+## Clear it to generate from the settings below. Shape, Erosion and beach settings
+## only matter when generating; the island's own size and heights come from the bake.
+@export var baked_island: Resource
+
 @export_group("Shape")
 @export var resolution: int = 256          ## Cells per side (vertices per side = resolution + 1)
 @export var cell_size: float = 2.0         ## Metres between vertices
 @export var max_height: float = 90.0       ## Height of the tallest peak in metres
-@export var terrain_seed: int = 0          ## 0 = new random terrain every run
+@export var terrain_seed: int = 71195        ## 0 = new random terrain every run
 @export var island: bool = true            ## Sink the map border into the sea, making an island
 
 @export_group("Erosion")
@@ -57,24 +62,16 @@ var rng := RandomNumberGenerator.new()
 
 
 func _ready() -> void:
-	if terrain_seed == 0:
-		rng.randomize()
-	else:
-		rng.seed = terrain_seed
-	size = resolution + 1
-
 	var t := Time.get_ticks_msec()
-	_generate_heightmap()
-	_erode()
-	if water_enabled:
-		_shape_beaches()
-	if island:
-		_sink_seabed()
+	if baked_island:
+		_load_baked(baked_island)
+	else:
+		generate()
 	_build_terrain()
 	if water_enabled:
 		_build_water()
 	_place_player()
-	print("Terrain generated in %d ms" % (Time.get_ticks_msec() - t))
+	print("Terrain %s in %d ms" % ["loaded" if baked_island else "generated", Time.get_ticks_msec() - t])
 	var vegetation: Node3D = null
 	if vegetation_enabled:
 		t = Time.get_ticks_msec()
@@ -88,6 +85,50 @@ func _ready() -> void:
 		ambience.name = "AmbientAudio"
 		add_child(ambience)
 		ambience.setup(self, vegetation)
+
+
+## Runs the procedural pipeline (no scene nodes are built). Used by _ready and by the
+## bake tool.
+func generate() -> void:
+	if terrain_seed == 0:
+		terrain_seed = randi_range(1, 999999)  # Pick one so it can be reported and baked
+	rng.seed = terrain_seed
+	size = resolution + 1
+	print("Generating island with seed %d" % terrain_seed)
+	_generate_heightmap()
+	_erode()
+	if water_enabled:
+		_shape_beaches()
+	if island:
+		_sink_seabed()
+
+
+func _load_baked(data: Resource) -> void:
+	cell_size = data.cell_size
+	max_height = data.max_height
+	water_level = data.water_level
+	terrain_seed = data.terrain_seed
+	rng.seed = data.terrain_seed
+	rng.state = data.rng_state
+
+	var h: Image = data.heightmap.get_image()
+	if h.get_format() != Image.FORMAT_RF:
+		h.convert(Image.FORMAT_RF)
+	size = h.get_width()
+	resolution = size - 1
+	assert(h.get_height() == size, "Baked heightmap must be square")
+	heights = h.get_data().to_float32_array()
+
+	var m: Image = data.masks.get_image()
+	if m.get_format() != Image.FORMAT_RGBF:
+		m.convert(Image.FORMAT_RGBF)
+	assert(m.get_width() == size and m.get_height() == size, "Masks must match the heightmap size")
+	var rgb := m.get_data().to_float32_array()
+	flow_map.resize(size * size)
+	deposit_map.resize(size * size)
+	for i in size * size:
+		flow_map[i] = rgb[i * 3]
+		deposit_map[i] = rgb[i * 3 + 1]
 
 
 ## Height in metres at a world-space XZ position. Interpolates across the same

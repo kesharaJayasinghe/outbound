@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" uid="uid://cfdhhjxk2aqqj" path="res://scripts/world/world_generator.gd" id="1_yncnp"]
 [ext_resource type="PackedScene" uid="uid://dnayudnhdmw1b" path="res://scenes/player.tscn" id="2_g11jo"]
+[ext_resource type="Resource" path="res://world/island.tres" id="3_island"]
 
 [sub_resource type="ProceduralSkyMaterial" id="PhysicalSkyMaterial_nd7rt"]
 sky_top_color = Color(0.16, 0.38, 0.78, 1)
@@ -32,6 +33,7 @@ fog_sky_affect = 0.1
 
 [node name="WorldGenerator" type="Node3D" unique_id=1536095373]
 script = ExtResource("1_yncnp")
+baked_island = ExtResource("3_island")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="." unique_id=1544611074]
 transform = Transform3D(-0.043664664, -0.6620984, 0.74814373, -0.37928018, 0.7037796, 0.6007003, -0.924251, -0.25752673, -0.2818511, 0, 0.0036799908, 0)

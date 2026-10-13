@@ -29,7 +29,7 @@ island with eroded mountains, beaches, jungle, wildlife ambience and a swimmable
 1. Install [Godot 4.7](https://godotengine.org/download) (standard build, Forward+ renderer).
 2. Open `project.godot` in Godot and press **F5**. The main scene is `scenes/world_generator.tscn`.
 
-Generating the island takes about 4 seconds at startup.
+The island loads from the baked files in `world/`, so startup is quick.
 
 ## Controls
 
@@ -45,9 +45,36 @@ Generating the island takes about 4 seconds at startup.
 
 Bindings live in **Project Settings → Input Map**.
 
+## The island: bake, then edit
+
+The island is generated procedurally once, then **baked** to editable files in `world/`, which
+the game loads at startup:
+
+| File | Contents |
+|---|---|
+| `island_height.exr` | 32-bit float heightmap, one pixel per terrain vertex. 1.0 = 90 m; values below 0 are deep seabed. |
+| `island_masks.exr` | Float RGB: **R** drainage flow (gullies, wet ground), **G** sediment, **B** reserved for rivers and lakes |
+| `island.tres` | Ties the images together with the cell size, height scale, water level and seed |
+
+**Editing:** open the EXR files in an image editor that handles 32-bit float, such as Krita.
+Paint, save, and Godot re-imports the changes. Vegetation, grass, sand, sounds and the player's
+spawn point all follow the edited terrain.
+
+**Baking a new island** (this overwrites the files above, including any hand edits):
+
+```sh
+godot --headless --path . --script res://tools/bake_island.gd -- --seed=71195 --force
+```
+
+Leave out `--seed` to use the generator's `terrain_seed`, or pass `--name=` to bake to a
+different file. To preview random islands without baking, clear **Baked Island** on the
+`WorldGenerator` node. The generator then builds a new island each run, about 4 s, and prints
+its seed so you can bake one you like.
+
 ## Tweaking the world
 
-Select the root node of `scenes/world_generator.tscn` to adjust generation in the Inspector:
+Select the root node of `scenes/world_generator.tscn` to adjust generation in the Inspector.
+These settings apply when generating or baking an island:
 
 | Group | Settings |
 |---|---|
@@ -68,7 +95,8 @@ scripts/player/  character controller, procedural swim animation
 shaders/         terrain, water, grass, foliage, bark, rock (+ shared wind include)
 audio/           ambience loops and footstep / splash sounds (see audio/CREDITS.txt)
 characters/      player model (see characters/human/LICENSE.txt)
-tools/           development helpers (screenshot capture), not used by the game
+world/           the baked island (heightmap + masks) the game loads
+tools/           development helpers (island baking, screenshot capture), not used by the game
 docs/            README images (ignored by Godot)
 ```
 
