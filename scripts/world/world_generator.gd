@@ -14,6 +14,7 @@ const VEGETATION = preload("res://scripts/world/vegetation.gd")
 const AMBIENT_AUDIO = preload("res://scripts/world/ambient_audio.gd")
 const WATERFALL = preload("res://scripts/world/waterfall.gd")
 const CAVE = preload("res://scripts/world/cave.gd")
+const BIRDS = preload("res://scripts/world/birds.gd")
 const HIDDEN_SEABED_DEPTH = 24.0  # Seabed deeper than this (metres) is left out of the terrain mesh
 const WATERFALL_STEP = 3.0  # Water surface drop across one cell (metres) that counts as a waterfall
 const BUILDER = preload("res://scripts/build/builder.gd")
@@ -62,6 +63,9 @@ const BUILDER = preload("res://scripts/build/builder.gd")
 @export_range(0.0, 3.0) var tree_density: float = 1.0
 @export_range(0.0, 3.0) var bush_density: float = 1.0
 @export_range(0.0, 3.0) var rock_density: float = 1.0
+
+@export_group("Wildlife")
+@export var birds_enabled: bool = true     ## Seabirds circling over the coasts
 
 @export_group("Audio")
 @export var audio_enabled: bool = true
@@ -119,6 +123,11 @@ func _ready() -> void:
 		add_child(vegetation)
 		vegetation.build(self)
 		print("Vegetation generated in %d ms" % (Time.get_ticks_msec() - t))
+	if birds_enabled and water_enabled:
+		var birds := BIRDS.new()
+		birds.name = "Birds"
+		add_child(birds)
+		birds.build(self)
 	if audio_enabled:
 		var ambience := AMBIENT_AUDIO.new()
 		ambience.name = "AmbientAudio"

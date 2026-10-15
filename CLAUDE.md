@@ -96,6 +96,11 @@ particles, and the river-rush loop pitched down as the roar).
   sends sounds made in the cave to a reverb bus (`Cave`, created in code). Deeper in, the
   `Ambience` bus (all outdoor sound, including the waterfall roar) is turned down and low-passed,
   following the camera. Keep new outdoor sounds on `Ambience` and close-up effects on `SFX`.
+- `birds.gd`: seabird flocks, one MultiMesh moved on the CPU each frame. Each flock circles
+  a drifting point over the shore, picked by farthest-point sampling of the coast, with the
+  first one at the waterfall. Birds bank toward the centre and stay `TERRAIN_CLEARANCE` above
+  the ground. `shaders/bird.gdshader` flaps the wings from INSTANCE_CUSTOM (phase, flap
+  amount, rate); UV2.x is the distance out along the wing.
 - `vegetation.gd`: jittered-grid scattering into MultiMeshes chunked every `CHUNK_SIZE` m (a
   fixed size, so culling doesn't degrade on a bigger world), plus one shared
   `StaticBody3D` with shape owners for collision. Grass is a camera-following GPU field:
