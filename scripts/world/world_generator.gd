@@ -245,6 +245,11 @@ func water_surface_at(world_x: float, world_z: float) -> float:
 	var half := (size - 1) * 0.5
 	var gx := clampf(world_x / cell_size + half, 0.0, size - 1.001)
 	var gz := clampf(world_z / cell_size + half, 0.0, size - 1.001)
+	# The carver writes lake and river levels a little past their banks, to keep the
+	# shoreline gap-free. Where land just outside dips below that level there's no water
+	# drawn, so only count the lake or river where it actually covers the ground.
+	if inland_mask.size() == size * size and _sample_map(inland_mask, gx, gz) < 0.01:
+		return water_level * max_height
 	return _sample_map(water_height, gx, gz) * max_height
 
 

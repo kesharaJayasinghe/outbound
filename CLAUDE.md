@@ -71,7 +71,8 @@ only take effect after a re-bake. Masks channel B holds `inland_mask`; `island_w
 
 The generator is the source of truth for terrain queries. Use these rather than re-deriving:
 `get_height(x, z)` (same triangle split as the mesh), `grid_index`, `surface_at`,
-`water_surface_at` (lake, river or sea level at a point), `water_depth_at`, `water_current_at`
+`water_surface_at` (lake, river or sea level at a point; sea level wherever `inland_mask` shows no water, because the
+carver writes lake and river levels a little past their banks), `water_depth_at`, `water_current_at`
 `inland_water_at` and `islet_weight` (vegetation thins out on islets). `water_surface()` is the sea level only. Use it just for sea-specific
 things (beaches, surf).
 
