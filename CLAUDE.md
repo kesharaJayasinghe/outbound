@@ -100,7 +100,10 @@ particles, and the river-rush loop pitched down as the roar).
   a drifting point over the shore, picked by farthest-point sampling of the coast, with the
   first one at the waterfall. Birds bank toward the centre and stay `TERRAIN_CLEARANCE` above
   the ground. `shaders/bird.gdshader` flaps the wings from INSTANCE_CUSTOM (phase, flap
-  amount, rate); UV2.x is the distance out along the wing.
+  amount, rate); UV2.x is the distance out along the wing. Each flock has one voice
+  (AudioStreamPlayer3D on `Ambience`). A random member calls every few seconds and the voice
+  follows it. A flock's `members` is a plain Array: a packed array inside a Dictionary is
+  copied on access, so appending to it changes nothing.
 - `vegetation.gd`: jittered-grid scattering into MultiMeshes chunked every `CHUNK_SIZE` m (a
   fixed size, so culling doesn't degrade on a bigger world), plus one shared
   `StaticBody3D` with shape owners for collision. Grass is a camera-following GPU field:

@@ -3,8 +3,9 @@ extends Node3D
 ## Seabirds circling over the coasts in loose flocks: gulls with white bodies, grey wings
 ## and dark tips. Each flock wheels around a point above the shore that drifts slowly;
 ## the birds glide most of the time, banking into the turn, and flap now and then
-## (more when climbing). All birds are one MultiMesh, moved here every frame; the wings
-## flap in shaders/bird.gdshader.
+## (more when climbing). Now and then a bird in each flock calls, and the sound follows
+## it. All birds are one MultiMesh, moved here every frame; the wings flap in
+## shaders/bird.gdshader.
 
 const BIRD_SHADER = preload("res://shaders/bird.gdshader")
 
@@ -16,10 +17,17 @@ const CIRCLE_RADIUS = Vector2(12.0, 38.0)
 const SIZE = 1.25                     # Mesh scale: about 1.9 m across the wings
 const SPEED = Vector2(8.0, 11.0)      # Metres per second
 const WANDER = 30.0                   # How far a flock's centre drifts (metres)
+const CALLS = [
+	preload("res://audio/birds/gull_1.wav"), preload("res://audio/birds/gull_2.wav"),
+	preload("res://audio/birds/gull_3.wav"), preload("res://audio/birds/gull_4.wav"),
+	preload("res://audio/birds/gull_5.wav"), preload("res://audio/birds/gull_6.wav"),
+	preload("res://audio/birds/gull_7.wav"),
+]
+const CALL_GAP = Vector2(4.0, 14.0)   # Seconds between calls from a flock
 
 var gen: Node3D
 var rng := RandomNumberGenerator.new()
-var flocks: Array[Dictionary] = []   # {centre, turn (+1 / -1), wander_phase}
+var flocks: Array[Dictionary] = []   # {centre, turn (+1 / -1), wander_phase, members, voice, ...}
 var birds: Array[Dictionary] = []    # Per bird: its flock, path and flapping state
 var multimesh := MultiMesh.new()
 var time := 0.0
@@ -79,9 +87,15 @@ func _place_flocks() -> void:
 			"centre": Vector3(c.x, sea, c.z),
 			"turn": 1.0 if rng.randf() < 0.5 else -1.0,
 			"wander_phase": rng.randf() * TAU,
+			"members": [],         # Bird indices (an Array: shared, unlike a packed array in a Dictionary)
+			"voice": _voice(),
+			"caller": -1,          # The bird calling right now
+			"call_wait": rng.randf_range(0.5, CALL_GAP.y),
+			"last_call": -1,
 		}
 		flocks.append(flock)
 		for k in rng.randi_range(BIRDS_PER_FLOCK.x, BIRDS_PER_FLOCK.y):
+			(flock.members as Array).append(birds.size())
 			birds.append({
 				"flock": flock,
 				"angle": rng.randf() * TAU,
@@ -95,6 +109,41 @@ func _place_flocks() -> void:
 				"flapping": false,
 				"last": Vector3.ZERO,
 			})
+
+
+## A flock's voice: gull calls carry a long way. On the Ambience bus, as outdoor sound
+## (muffled in caves).
+func _voice() -> AudioStreamPlayer3D:
+	var voice := AudioStreamPlayer3D.new()
+	voice.bus = &"Ambience"
+	voice.unit_size = 16.0
+	voice.max_distance = 240.0
+	add_child(voice)
+	return voice
+
+
+## Now and then a bird in each flock calls; the voice follows the caller while it plays
+func _update_calls(delta: float) -> void:
+	for flock in flocks:
+		var voice: AudioStreamPlayer3D = flock.voice
+		var members: Array = flock.members
+		if voice.playing and flock.caller >= 0:
+			voice.global_position = multimesh.get_instance_transform(flock.caller).origin
+			continue
+		flock.call_wait -= delta
+		if flock.call_wait > 0.0 or members.is_empty():
+			continue
+		flock.call_wait = rng.randf_range(CALL_GAP.x, CALL_GAP.y)
+		flock.caller = members[rng.randi() % members.size()]
+		var pick := rng.randi() % CALLS.size()
+		if pick == flock.last_call:
+			pick = (pick + 1) % CALLS.size()
+		flock.last_call = pick
+		voice.stream = CALLS[pick]
+		voice.pitch_scale = rng.randf_range(0.92, 1.08)
+		voice.volume_db = rng.randf_range(-5.0, 0.0)
+		voice.global_position = multimesh.get_instance_transform(flock.caller).origin
+		voice.play()
 
 
 ## Shore points: land vertices next to the sea (every fourth vertex is plenty)
@@ -116,6 +165,7 @@ func _coast_points() -> PackedVector3Array:
 
 func _process(delta: float) -> void:
 	_update(delta)
+	_update_calls(delta)
 
 
 func _update(delta: float) -> void:
