@@ -4,6 +4,9 @@ extends CharacterBody3D
 ## orbit camera, movement relative to the camera, the character turning to face where
 ## it moves, and walk / jog / sprint animations blended by speed. V toggles first person.
 ## In deep water the character swims: treading water when still, front crawl when moving.
+## C sits down on the ground (and gets up again, as does moving or jumping).
+
+const INVENTORY = preload("res://scripts/build/inventory.gd")
 
 const WALK_SPEED = 1.6
 const JOG_SPEED = 4.5
@@ -26,8 +29,16 @@ const ANIM_IDLE = "Human Armature|Idle"
 const ANIM_WALK = "Human Armature|Walk"
 const ANIM_RUN = "Human Armature|Run"
 const ANIM_JUMP = "Human Armature|Jump"
+## Swim clips (treading water, front crawl), authored for this skeleton; see tools/convert_anims.gd
+const SWIM_ANIMS = preload("res://characters/human/swim_animations.res")
+const ANIM_TREAD = "swim/tread"
+const ANIM_CRAWL = "swim/crawl"
+## Sitting on the ground: sit down (played backwards to stand up), then a seated loop
+const SIT_ANIMS = preload("res://characters/human/sit_animations.res")
+const ANIM_SIT_DOWN = "sit/down"
+const ANIM_SIT_IDLE = "sit/idle"
 
-# Footsteps, ordered left 1-3 then right 1-3
+# Footsteps: each set lists its left-foot sounds first, then the same number of right-foot sounds
 const SOFT_STEPS = [
 	preload("res://audio/footsteps/soft_l1.wav"), preload("res://audio/footsteps/soft_l2.wav"),
 	preload("res://audio/footsteps/soft_l3.wav"), preload("res://audio/footsteps/soft_r1.wav"),
@@ -37,6 +48,14 @@ const STONE_STEPS = [
 	preload("res://audio/footsteps/stone_l1.wav"), preload("res://audio/footsteps/stone_l2.wav"),
 	preload("res://audio/footsteps/stone_l3.wav"), preload("res://audio/footsteps/stone_r1.wav"),
 	preload("res://audio/footsteps/stone_r2.wav"), preload("res://audio/footsteps/stone_r3.wav"),
+]
+const SAND_STEPS = [
+	preload("res://audio/footsteps/sand_l1.wav"), preload("res://audio/footsteps/sand_l2.wav"),
+	preload("res://audio/footsteps/sand_l3.wav"), preload("res://audio/footsteps/sand_l4.wav"),
+	preload("res://audio/footsteps/sand_l5.wav"), preload("res://audio/footsteps/sand_l6.wav"),
+	preload("res://audio/footsteps/sand_r1.wav"), preload("res://audio/footsteps/sand_r2.wav"),
+	preload("res://audio/footsteps/sand_r3.wav"), preload("res://audio/footsteps/sand_r4.wav"),
+	preload("res://audio/footsteps/sand_r5.wav"), preload("res://audio/footsteps/sand_r6.wav"),
 ]
 const WATER_STEPS = [
 	preload("res://audio/footsteps/water_1.wav"), preload("res://audio/footsteps/water_2.wav"),
@@ -58,6 +77,17 @@ const CRAWL_PITCH = -1.35      # Body tilt (radians) when swimming flat out
 const SWIM_CAMERA_HEIGHT = 0.65  # Camera pivot above the water while swimming
 const SWIM_EYE_HEIGHT = 0.2
 
+const STAND_UP_SPEED = 1.4     # Getting up plays the sit-down clip backwards, this much faster
+const SIT_MAX_DEPTH = 0.2      # Deepest water you can sit down in
+const SIT_MIN_FLOOR_Y = 0.85   # Flattest ground to sit on (floor normal's y)
+# Seated, the body is behind the feet: move the camera pivot back and down with it
+const SIT_CAMERA_BACK = 0.35
+const SIT_CAMERA_HEIGHT = 0.95
+const SIT_EYE_BACK = 0.5
+const SIT_EYE_HEIGHT = 0.85
+
+const FOOT_SPACING = 0.11      # Sideways distance from the body's centre to each footprint
+
 const MIN_SPLASH_DEPTH = 0.03  # Water this shallow (metres) still sounds like wet sand
 const MAX_WADE_DEPTH = 1.4     # Deeper than this the body is submerged and steps are silent
 # Distance covered per step, matched to the walk and run animation cycles
@@ -72,12 +102,21 @@ var left_foot := true
 var was_on_floor := true
 var was_in_water := false
 var last_splash: AudioStream
+var last_step: Array[AudioStream] = [null, null]  # Per foot, to avoid immediate repeats
 var feet: Array[AudioStreamPlayer3D] = []
 var swimming := false
 var swim_blend := 0.0   # 0 = on foot, 1 = fully in the swimming pose
 var crawl := 0.0        # 0 = treading water, 1 = front crawl
 var swim_time := 0.0
-var swim_modifier: SkeletonModifier3D
+var tread_phase := 0.0  # Position in the treading-water cycle (0..1)
+var stroke_phase := 0.0 # Position in the front-crawl cycle: left hand enters at 0, right at 0.5
+enum Sit { NONE, SITTING_DOWN, SEATED, STANDING_UP }
+var sit := Sit.NONE
+var sit_time := 0.0     # Position in the sit-down clip (seconds); runs backwards when standing up
+var sit_idle_time := 0.0
+var sit_blend := 0.0    # 0 = standing, 1 = seated, following the clip (moves the camera)
+var footprints: Node3D
+var inventory = INVENTORY.new()  ## Resources carried, spent on crafting (builder.gd)
 
 @onready var model: Node3D = $Model
 @onready var camera_rig: Node3D = $CameraRig
@@ -92,9 +131,10 @@ func _ready() -> void:
 	spring_arm.add_excluded_object(get_rid())
 	camera.current = true
 	_setup_character_visuals(model)
-	swim_modifier = preload("res://scripts/player/swim_modifier.gd").new()
-	swim_modifier.influence = 0.0
-	model.find_child("Skeleton3D", true, false).add_child(swim_modifier)
+	footprints = preload("res://scripts/player/footprints.gd").new()
+	footprints.name = "Footprints"
+	add_child(footprints)
+	footprints.set_excluded_layers(1 << (CHARACTER_LAYER - 1))  # Don't print onto our own feet
 	for i in 2:
 		var foot := AudioStreamPlayer3D.new()
 		foot.bus = &"SFX"
@@ -115,6 +155,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		first_person = not first_person
 		_apply_view_mode()
 
+	if event.is_action_pressed("sit"):
+		if sit == Sit.NONE:
+			_sit_down()
+		else:
+			_stand_up()
+
 	# Escape frees the mouse cursor; click to recapture it
 	if event.is_action_pressed("ui_cancel"):
 		Input.set_mouse_mode(Input.MOUSE_MODE_VISIBLE)
@@ -133,12 +179,14 @@ func _physics_process(delta: float) -> void:
 	_update_swim_state()
 	if swimming:
 		_swim(delta, direction, input)
+	elif sit != Sit.NONE:
+		_sitting(delta, input)
 	else:
 		_walk(delta, direction, input)
 
 	# Face the direction of travel (or the camera direction in first person)
 	var face_dir := forward if first_person else direction
-	if face_dir.length_squared() > 0.001:
+	if face_dir.length_squared() > 0.001 and sit == Sit.NONE:
 		var target_yaw := atan2(-face_dir.x, -face_dir.z)
 		model.rotation.y = lerp_angle(model.rotation.y, target_yaw, 1.0 - exp(-TURN_SPEED * delta))
 	_update_swim_pose(delta)
@@ -161,11 +209,15 @@ func _walk(delta: float, direction: Vector3, input: Vector2) -> void:
 		speed = SPRINT_SPEED
 	elif Input.is_action_pressed("walk"):
 		speed = WALK_SPEED
-	# Wading: deeper water drags the legs back
+	# Wading: deeper water drags the legs back, and a river current pushes you along
 	var world := get_parent()
+	var target := Vector3.ZERO
 	if world and world.has_method("water_depth_at"):
-		speed *= lerpf(1.0, 0.4, smoothstep(0.3, 1.3, world.water_depth_at(global_position)))
-	var target := direction * speed * minf(input.length(), 1.0)
+		var depth: float = world.water_depth_at(global_position)
+		speed *= lerpf(1.0, 0.4, smoothstep(0.3, 1.3, depth))
+		if depth > 0.3 and world.has_method("water_current_at"):
+			target = world.water_current_at(global_position.x, global_position.z) * smoothstep(0.3, 1.2, depth) * 0.6
+	target += direction * speed * minf(input.length(), 1.0)
 
 	var accel := ACCELERATION * (1.0 if is_on_floor() else AIR_CONTROL)
 	var horizontal := Vector2(velocity.x, velocity.z).lerp(Vector2(target.x, target.z), 1.0 - exp(-accel * delta))
@@ -184,10 +236,19 @@ func _process(delta: float) -> void:
 	var swim_height := FLOAT_DEPTH + (SWIM_EYE_HEIGHT if first_person else SWIM_CAMERA_HEIGHT)
 	height = lerpf(height, swim_height, swim_blend)
 	var target := global_position + Vector3.UP * height
+	if sit_blend > 0.0:
+		var yaw := model.rotation.y
+		var back := Vector3(sin(yaw), 0.0, cos(yaw))  # The model faces -Z
+		target = target.lerp(global_position + back * (SIT_EYE_BACK if first_person else SIT_CAMERA_BACK) \
+				+ Vector3.UP * (SIT_EYE_HEIGHT if first_person else SIT_CAMERA_HEIGHT), sit_blend)
 	camera_rig.global_position = camera_rig.global_position.lerp(target, 1.0 - exp(-20.0 * delta))
 
 	var sprinting := Input.is_action_pressed("sprint") and Vector2(velocity.x, velocity.z).length() > JOG_SPEED
 	camera.fov = lerpf(camera.fov, SPRINT_FOV if sprinting else BASE_FOV, 1.0 - exp(-4.0 * delta))
+	if swim_blend > 0.0:
+		_update_swim_strokes(delta)
+	if sit != Sit.NONE:
+		_update_sit_animation(delta)
 
 
 func _apply_view_mode() -> void:
@@ -219,7 +280,9 @@ func _setup_character_visuals(node: Node) -> void:
 
 func _water_surface() -> float:
 	var world := get_parent()
-	return world.water_surface() if world and world.has_method("water_surface") else -INF
+	if world and world.has_method("water_surface_at"):
+		return world.water_surface_at(global_position.x, global_position.z)
+	return -INF
 
 
 ## Swim once the seabed drops away (walking out, or falling in); stand up again
@@ -230,10 +293,14 @@ func _update_swim_state() -> void:
 	if surface == -INF or not world.has_method("get_height"):
 		swimming = false
 		return
+	if world.has_method("is_underground") and world.is_underground(global_position):
+		surface = -INF  # In a cave: any river is overhead, not around us
 	var bed_depth: float = surface - world.get_height(global_position.x, global_position.z)
 	if not swimming and bed_depth > SWIM_ENTER_DEPTH and global_position.y < surface - SWIM_EXIT_DEPTH:
 		swimming = true
 		swim_time = 0.0
+		sit = Sit.NONE
+		sit_blend = 0.0
 		if velocity.y < -2.5:
 			_play_splash(1.0, 1.0, true)  # Fell or jumped in
 		velocity.y *= 0.3
@@ -248,6 +315,9 @@ func _swim(delta: float, direction: Vector3, input: Vector2) -> void:
 	swim_time += delta
 	var speed := SWIM_SPRINT_SPEED if Input.is_action_pressed("sprint") else SWIM_SPEED
 	var target := direction * speed * minf(input.length(), 1.0)
+	var world := get_parent()
+	if world.has_method("water_current_at"):
+		target += world.water_current_at(global_position.x, global_position.z)  # Rivers carry you along
 	var horizontal := Vector2(velocity.x, velocity.z).lerp(Vector2(target.x, target.z), 1.0 - exp(-SWIM_ACCELERATION * delta))
 	velocity.x = horizontal.x
 	velocity.z = horizontal.y
@@ -255,27 +325,34 @@ func _swim(delta: float, direction: Vector3, input: Vector2) -> void:
 	# Buoyancy: spring towards floating height (head above water) with a gentle bob,
 	# never lower than the seabed in water that's only just deep enough to swim
 	var float_y := _water_surface() - FLOAT_DEPTH + sin(swim_time * 1.7) * 0.04
-	var world := get_parent()
 	float_y = maxf(float_y, world.get_height(global_position.x, global_position.z) + 0.05)
 	velocity.y = lerpf(velocity.y, (float_y - global_position.y) * 4.0, 1.0 - exp(-5.0 * delta))
 	move_and_slide()
 
-	# Advance the stroke; arms enter the water twice per cycle, each with a small splash
-	var swim_speed := horizontal.length()
-	var before := floori(swim_modifier.phase * 2.0)
-	swim_modifier.phase += delta * lerpf(0.35, 0.45 + 0.3 * swim_speed / SWIM_SPEED, crawl)
-	if floori(swim_modifier.phase * 2.0) != before and crawl > 0.4:
+
+## Plays the swim clips at the stroke rate, which picks up with speed. Each clip is sought
+## to its phase every frame, so the hands meet the water exactly when the splashes play.
+func _update_swim_strokes(delta: float) -> void:
+	var swim_speed := Vector2(velocity.x, velocity.z).length()
+	var tread_length := SWIM_ANIMS.get_animation("tread").length
+	var crawl_length := SWIM_ANIMS.get_animation("crawl").length
+	tread_phase = fposmod(tread_phase + delta / tread_length, 1.0)
+	# The clip's own pace (one cycle per crawl_length) is the stroke rate at SWIM_SPEED
+	var before := floori(stroke_phase * 2.0)
+	stroke_phase += delta / crawl_length * lerpf(0.65, 1.0, swim_speed / SWIM_SPEED)
+	if floori(stroke_phase * 2.0) != before and crawl > 0.4 and swimming:
 		_play_stroke_splash(swim_speed / SWIM_SPRINT_SPEED)
+	stroke_phase = fposmod(stroke_phase, 1.0)
+	anim_tree.set("parameters/tread_seek/seek_request", tread_phase * tread_length)
+	anim_tree.set("parameters/crawl_seek/seek_request", stroke_phase * crawl_length)
+	anim_tree.set("parameters/swim/blend_amount", crawl)
 
 
-## Tilts the body flat for the crawl (pivoting about the chest, not the feet) and
-## drives the procedural swim pose.
+## Tilts the body flat for the crawl, pivoting about the chest, not the feet.
 func _update_swim_pose(delta: float) -> void:
 	swim_blend = move_toward(swim_blend, 1.0 if swimming else 0.0, delta * 2.5)
 	var target_crawl := clampf(Vector2(velocity.x, velocity.z).length() / 1.2, 0.0, 1.0) if swimming else 0.0
 	crawl = lerpf(crawl, target_crawl, 1.0 - exp(-3.0 * delta))
-	swim_modifier.influence = swim_blend
-	swim_modifier.crawl = crawl
 
 	var tilt := CRAWL_PITCH * crawl * swim_blend
 	model.rotation.x = tilt
@@ -296,6 +373,68 @@ func _play_stroke_splash(intensity: float) -> void:
 	foot.pitch_scale = randf_range(1.05, 1.25)
 	foot.volume_db = linear_to_db(lerpf(0.3, 0.6, clampf(intensity, 0.0, 1.0)))
 	foot.play()
+
+
+# --- Sitting -------------------------------------------------------------------
+
+func _sit_down() -> void:
+	var world := get_parent()
+	var depth := 0.0
+	if world and world.has_method("water_depth_at"):
+		depth = world.water_depth_at(global_position)
+	if swimming or not is_on_floor() or get_floor_normal().y < SIT_MIN_FLOOR_Y or depth > SIT_MAX_DEPTH:
+		return
+	sit = Sit.SITTING_DOWN
+	sit_time = 0.0
+	anim_tree.set("parameters/sit/blend_amount", 0.0)
+	anim_tree.set("parameters/state/transition_request", "sit")
+
+
+func _stand_up() -> void:
+	if sit == Sit.SITTING_DOWN or sit == Sit.SEATED:
+		sit = Sit.STANDING_UP
+
+
+## Seated: the body stays put. Moving, jumping or losing the ground gets you up again.
+func _sitting(delta: float, input: Vector2) -> void:
+	if input.length() > 0.3 or Input.is_action_just_pressed("jump"):
+		_stand_up()
+	velocity.x = 0.0
+	velocity.z = 0.0
+	velocity.y -= gravity * delta
+	move_and_slide()
+	if is_on_floor():
+		velocity.y = 0.0
+	elif velocity.y < -3.0:  # Slid off an edge: drop straight into the fall
+		sit = Sit.NONE
+		sit_blend = 0.0
+
+
+## Advances the sit clips: sit down, loop the seated idle, or play the sit-down backwards to get up.
+func _update_sit_animation(delta: float) -> void:
+	var down_length := SIT_ANIMS.get_animation("down").length
+	match sit:
+		Sit.SITTING_DOWN:
+			sit_time += delta
+			if sit_time >= down_length:
+				sit_time = down_length
+				sit_idle_time = 0.0  # The idle loop starts on the sit-down's last pose
+				sit = Sit.SEATED
+		Sit.SEATED:
+			sit_idle_time = fmod(sit_idle_time + delta, SIT_ANIMS.get_animation("idle").length)
+		Sit.STANDING_UP:
+			sit_time -= delta * STAND_UP_SPEED
+			if sit_time <= 0.0:
+				sit_time = 0.0
+				sit = Sit.NONE
+				anim_tree.set("parameters/state/transition_request", "ground")
+	sit_blend = smoothstep(0.0, 1.0, sit_time / down_length)
+	# Fade into the idle loop once seated, and out of it (wherever it is) when getting up
+	var idle_weight: float = anim_tree.get("parameters/sit/blend_amount")
+	idle_weight = move_toward(idle_weight, 1.0 if sit == Sit.SEATED else 0.0, delta * 4.0)
+	anim_tree.set("parameters/sit/blend_amount", idle_weight)
+	anim_tree.set("parameters/sit_down_seek/seek_request", sit_time)
+	anim_tree.set("parameters/sit_idle_seek/seek_request", sit_idle_time)
 
 
 # --- Footsteps -----------------------------------------------------------------
@@ -334,17 +473,39 @@ func _play_step(intensity: float, landing: bool) -> void:
 	var surface := &"grass"
 	if world and world.has_method("surface_at"):
 		surface = world.surface_at(global_position, _floor_collider())
-	var pool: Array = STONE_STEPS if surface == &"stone" else SOFT_STEPS
+	var pool: Array = SOFT_STEPS
+	if surface == &"stone":
+		pool = STONE_STEPS
+	elif surface == &"sand":
+		pool = SAND_STEPS
+	var half := pool.size() / 2
 	# Landing hits with both feet; otherwise alternate left and right
-	var sides := [0, 3] if landing else [0 if left_foot else 3]
+	var sides := [0, 1] if landing else [0 if left_foot else 1]
 	left_foot = not left_foot
 	for side in sides:
-		var foot := feet[0 if side == 0 else 1]
-		foot.stream = pool[side + randi() % 3]
-		# Grass is the "soft" recording, pitched down and quieter than sand
+		var foot := feet[side]
+		var stream: AudioStream = pool[side * half + randi() % half]
+		if stream == last_step[side]:
+			stream = pool[side * half + (pool.find(stream) - side * half + 1 + randi() % (half - 1)) % half]
+		last_step[side] = stream
+		foot.stream = stream
+		if surface == &"sand":
+			_leave_footprint(side == 0)
+		# Grass uses the "soft" recording, pitched down and quieter
 		foot.pitch_scale = randf_range(0.92, 1.08) * (0.88 if surface == &"grass" else 1.0)
-		foot.volume_db = linear_to_db(intensity) + (-5.0 if surface == &"grass" else 0.0) + (2.0 if landing else 0.0)
+		foot.volume_db = linear_to_db(intensity) + (-5.0 if surface == &"grass" else -1.0 if surface == &"sand" else 0.0) \
+				+ (2.0 if landing else 0.0)
 		foot.play()
+
+
+func _leave_footprint(left: bool) -> void:
+	var yaw := model.global_rotation.y
+	var right := Vector3(cos(yaw), 0.0, -sin(yaw))
+	var pos := global_position + right * (-FOOT_SPACING if left else FOOT_SPACING)
+	var world := get_parent()
+	if world and world.has_method("get_height"):
+		pos.y = world.get_height(pos.x, pos.z)
+	footprints.add(pos, yaw, left)
 
 
 ## Wading: splashes get louder and deeper-pitched as the water gets deeper. Jumping in,
@@ -379,9 +540,12 @@ func _floor_collider() -> Object:
 ## Builds the animation graph:
 ##   locomotion (blend space idle -> walk -> run by speed) -> time scale --\
 ##   jump clip (seekable) ------------------------------------------------> ground/air/swim transition
-##   idle clip (base pose for swimming) ---------------------------------/
+##   tread / crawl clips (each sought to its phase), blended by speed --/
+##   sit-down clip (sought, also backwards) / seated idle loop, blended -/
 func _build_animation_tree() -> AnimationTree:
 	var player: AnimationPlayer = model.find_child("AnimationPlayer", true, false)
+	player.add_animation_library("swim", SWIM_ANIMS)
+	player.add_animation_library("sit", SIT_ANIMS)
 	for anim_name in [ANIM_IDLE, ANIM_WALK, ANIM_RUN]:
 		player.get_animation(anim_name).loop_mode = Animation.LOOP_LINEAR
 	_flatten_jump_hips(player.get_animation(ANIM_JUMP))
@@ -397,6 +561,7 @@ func _build_animation_tree() -> AnimationTree:
 	state.add_input("ground")
 	state.add_input("air")
 	state.add_input("swim")
+	state.add_input("sit")
 	state.xfade_time = 0.15
 
 	var graph := AnimationNodeBlendTree.new()
@@ -404,13 +569,31 @@ func _build_animation_tree() -> AnimationTree:
 	graph.add_node("speed_scale", AnimationNodeTimeScale.new())
 	graph.add_node("jump", _clip(ANIM_JUMP))
 	graph.add_node("jump_seek", AnimationNodeTimeSeek.new())
-	graph.add_node("swim", _clip(ANIM_IDLE))  # Base pose; swim_modifier.gd moves the limbs
+	graph.add_node("tread", _clip(ANIM_TREAD))
+	graph.add_node("tread_seek", AnimationNodeTimeSeek.new())
+	graph.add_node("crawl", _clip(ANIM_CRAWL))
+	graph.add_node("crawl_seek", AnimationNodeTimeSeek.new())
+	graph.add_node("swim", AnimationNodeBlend2.new())
+	graph.add_node("sit_down", _clip(ANIM_SIT_DOWN))
+	graph.add_node("sit_down_seek", AnimationNodeTimeSeek.new())
+	graph.add_node("sit_idle", _clip(ANIM_SIT_IDLE))
+	graph.add_node("sit_idle_seek", AnimationNodeTimeSeek.new())
+	graph.add_node("sit", AnimationNodeBlend2.new())
 	graph.add_node("state", state)
 	graph.connect_node("speed_scale", 0, "locomotion")
 	graph.connect_node("jump_seek", 0, "jump")
+	graph.connect_node("tread_seek", 0, "tread")
+	graph.connect_node("crawl_seek", 0, "crawl")
+	graph.connect_node("swim", 0, "tread_seek")
+	graph.connect_node("swim", 1, "crawl_seek")
+	graph.connect_node("sit_down_seek", 0, "sit_down")
+	graph.connect_node("sit_idle_seek", 0, "sit_idle")
+	graph.connect_node("sit", 0, "sit_down_seek")
+	graph.connect_node("sit", 1, "sit_idle_seek")
 	graph.connect_node("state", 0, "speed_scale")
 	graph.connect_node("state", 1, "jump_seek")
 	graph.connect_node("state", 2, "swim")
+	graph.connect_node("state", 3, "sit")
 	graph.connect_node("output", 0, "state")
 
 	var tree := AnimationTree.new()

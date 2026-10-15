@@ -10,17 +10,20 @@ const FOLIAGE_SHADER = preload("res://shaders/foliage.gdshader")
 const BARK_SHADER = preload("res://shaders/bark.gdshader")
 const ROCK_SHADER = preload("res://shaders/rock.gdshader")
 
-const CHUNKS = 4               # Scatter chunks per side
+const CHUNK_SIZE = 128.0       # Metres per scatter chunk side (smaller culls better, but more draw calls)
 const GRASS_SPACING = 0.35     # Metres between grass clumps
 const GRASS_CHUNKS = 6         # Grass chunks per side around the camera
 const GRASS_CHUNK_CELLS = 34   # Clumps per grass chunk side
 const SPAWN_CLEARANCE = 4.0    # Keep trees and boulders off the player's spawn point
+const ISLET_PALMS = 0.12       # Palm chance per tree spot in an islet's palm clumps
+const ISLET_BUSHES = 0.25      # Bush density on islets, relative to the main island
 
 var gen: Node3D
 var rng := RandomNumberGenerator.new()
 var forest_noise := FastNoiseLite.new()
 var water_m := -INF
 var half_world := 0.0
+var chunks := 1                # Scatter chunks per side
 var spawn := Vector2.INF
 var buckets := {}              # [mesh, chunk] -> {mesh, xforms, vis_end}
 var body: StaticBody3D
@@ -36,6 +39,7 @@ func build(generator: Node3D) -> void:
 	if gen.water_enabled:
 		water_m = gen.water_level * gen.max_height
 	half_world = (gen.size - 1) * 0.5 * gen.cell_size
+	chunks = maxi(1, ceili(half_world * 2.0 / CHUNK_SIZE))
 	var player := gen.get_node_or_null("Player") as Node3D
 	if player:
 		spawn = Vector2(player.position.x, player.position.z)
@@ -67,6 +71,17 @@ func _slope(i: int) -> float:
 	return 1.0 - gen.normal_map[i].y
 
 
+## True in or right beside a lake or river: water covers the spot, or the ground is
+## less than `clearance` metres above the local water surface.
+func _in_inland_water(x: float, z: float, h: float, clearance: float) -> bool:
+	if not gen.has_method("inland_water_at"):
+		return false
+	if gen.inland_water_at(x, z) > 0.0:
+		return true
+	var surface: float = gen.water_surface_at(x, z)
+	return surface > water_m + 0.05 and h < surface + clearance
+
+
 func _near_spawn(x: float, z: float) -> bool:
 	return Vector2(x, z).distance_to(spawn) < SPAWN_CLEARANCE
 
@@ -86,9 +101,9 @@ func _jittered_grid(spacing: float, place: Callable) -> void:
 
 
 func _add(mesh: Mesh, xform: Transform3D, vis_end := 0.0) -> void:
-	var cx := clampi(int((xform.origin.x + half_world) / (half_world * 2.0) * CHUNKS), 0, CHUNKS - 1)
-	var cz := clampi(int((xform.origin.z + half_world) / (half_world * 2.0) * CHUNKS), 0, CHUNKS - 1)
-	var key := [mesh, cz * CHUNKS + cx]
+	var cx := clampi(int((xform.origin.x + half_world) / (half_world * 2.0) * chunks), 0, chunks - 1)
+	var cz := clampi(int((xform.origin.z + half_world) / (half_world * 2.0) * chunks), 0, chunks - 1)
+	var key := [mesh, cz * chunks + cx]
 	if not buckets.has(key):
 		buckets[key] = {"mesh": mesh, "xforms": [], "vis_end": vis_end}
 	buckets[key].xforms.append(xform)
@@ -167,7 +182,7 @@ func _scatter_trees() -> void:
 		var h: float = gen.get_height(x, z)
 		var above := h - water_m
 		var slope := _slope(i)
-		if above < 1.0 or slope > 0.35:
+		if above < 1.0 or slope > 0.35 or _in_inland_water(x, z, h, 0.8):
 			return
 		var forest := forest_noise.get_noise_2d(x, z) * 0.5 + 0.5
 		var flat := 1.0 - smoothstep(0.18, 0.35, slope)
@@ -177,6 +192,11 @@ func _scatter_trees() -> void:
 		var palm_p := (shore * 0.6 + smoothstep(0.6, 0.85, forest) * 0.03) * flat
 		var jungle_p: float = smoothstep(0.42, 0.68, forest + gen.flow_map[i] * 0.25) * (1.0 - shore) \
 				* (1.0 - smoothstep(0.45, 0.7, altitude)) * flat * 0.6
+		# Islets are open sand with a few palms in loose clumps, and no rainforest
+		var islet: float = gen.islet_weight(x, z)
+		if islet > 0.0:
+			palm_p = lerpf(palm_p, ISLET_PALMS * (0.2 + 0.8 * smoothstep(0.4, 0.7, forest)), islet)
+			jungle_p *= 1.0 - islet
 		var r := rng.randf()
 		var rot := Basis(Vector3.UP, rng.randf() * TAU)
 		if r < palm_p:
@@ -210,10 +230,12 @@ func _scatter_bushes() -> void:
 	_jittered_grid(3.5 / sqrt(gen.bush_density), func(x: float, z: float) -> void:
 		var i: int = gen.grid_index(x, z)
 		var h: float = gen.get_height(x, z)
-		if h - water_m < gen.beach_height + 0.4 or _slope(i) > 0.3 or h / gen.max_height > 0.7:
+		if h - water_m < gen.beach_height + 0.4 or _slope(i) > 0.3 or h / gen.max_height > 0.7 \
+				or _in_inland_water(x, z, h, 0.4):
 			return
 		var forest := forest_noise.get_noise_2d(x, z) * 0.5 + 0.5
 		var p: float = 0.04 + smoothstep(0.4, 0.7, forest) * 0.45 + gen.flow_map[i] * 0.1
+		p *= 1.0 - (1.0 - ISLET_BUSHES) * gen.islet_weight(x, z)
 		if rng.randf() < p:
 			var s := rng.randf_range(0.6, 1.4)
 			var rot := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s, s * rng.randf_range(0.8, 1.2), s))
@@ -282,6 +304,8 @@ func _build_grass() -> void:
 		m *= 1.0 - smoothstep(0.14, 0.24, _slope(i))
 		m *= 1.0 - smoothstep(0.75, 0.95, gen.deposit_map[i])
 		m *= 1.0 - smoothstep(0.7, 0.8, h)
+		# No grass under lakes and rivers or on the waterline
+		m *= (1.0 - gen.inland_mask[i]) * smoothstep(0.0, 0.5 / gen.max_height, h - gen.water_height[i])
 		mask[i] = int(clampf(m, 0.0, 1.0) * 255.0)
 	var mask_tex := ImageTexture.create_from_image(Image.create_from_data(gen.size, gen.size, false, Image.FORMAT_R8, mask))
 	var height_tex := ImageTexture.create_from_image(

@@ -28,3 +28,28 @@ footsteps/water_land_3.wav
   "Water Splash and sand footsteps" by Peludo (splash2.wav)
   https://opengameart.org/content/water-splash-and-sand-footsteps
   Leading silence trimmed, shortened with a fade-out, loudness-normalised.
+
+footsteps/sand_l1-6.wav, footsteps/sand_r1-6.wav
+  "Water Splash and sand footsteps" by Peludo (sand_footsteps.mp3, recorded on a beach)
+  https://opengameart.org/content/water-splash-and-sand-footsteps
+  Sliced into 12 single steps (first step dropped), short fade-outs, loudness-normalised.
+
+river_babble.wav, river_rush.wav
+  "40 CC0 water / splash / slime SFX" by rubberduck (loop_water_01, loop_water_02)
+  https://opengameart.org/content/40-cc0-water-splash-slime-sfx
+  Converted to mono WAV and loudness-normalised (already seamless loops).
+
+cave/drip_1-6.wav
+  "Dripping water loop" by Independent.nu (submitted by qubodup)
+  https://opengameart.org/content/dripping-water-loop
+  Converted to mono, high-passed at 150 Hz and noise-reduced, sliced into six single drips
+  with short fade-outs, peak-normalised to -4 dB.
+
+birds/gull_1-7.wav
+  "Solo Seagull Sound Effects" by Rango Mango (Seagull Ambient 1, 3, 4, 5, 6, 7 and
+  Seagull Big Ambient 2)
+  https://opengameart.org/content/solo-seagull-sound-effects
+  The uploader cut these from a YouTube video, with the video owner's permission to share,
+  and released them as CC0 ("no credit required").
+  Converted to mono, high-passed at 300 Hz and noise-reduced, leading silence trimmed, short
+  fade-outs, peak-normalised to -3 dB.

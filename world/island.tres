@@ -1,0 +1,29 @@
+[gd_resource type="Resource" load_steps=5 format=3]
+
+[ext_resource type="Script" path="res://scripts/world/island_data.gd" id="1_data"]
+[ext_resource type="Texture2D" path="res://world/island_height.exr" id="2_height"]
+[ext_resource type="Texture2D" path="res://world/island_masks.exr" id="3_masks"]
+[ext_resource type="Texture2D" path="res://world/island_water.exr" id="4_water"]
+
+[resource]
+script = ExtResource("1_data")
+heightmap = ExtResource("2_height")
+masks = ExtResource("3_masks")
+water = ExtResource("4_water")
+cell_size = 2.0
+max_height = 90.0
+water_level = 0.08
+terrain_seed = 71195
+rng_state = 3496353382628215189
+waterfalls = Array[Dictionary]([{
+"cave": true,
+"dir": Vector3(-0.9945219, 0, 0.104528464),
+"drop": 27.45621566772461,
+"ledge": 7.65,
+"top": Vector3(-163.4741, 34.656216, 46.03473),
+"width": 5.6000000000000005
+}])
+islets = Array[Dictionary]([{
+"center": Vector2(-410, 210),
+"radius": 99.39861276313626
+}])
