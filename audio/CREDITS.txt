@@ -38,3 +38,9 @@ river_babble.wav, river_rush.wav
   "40 CC0 water / splash / slime SFX" by rubberduck (loop_water_01, loop_water_02)
   https://opengameart.org/content/40-cc0-water-splash-slime-sfx
   Converted to mono WAV and loudness-normalised (already seamless loops).
+
+cave/drip_1-6.wav
+  "Dripping water loop" by Independent.nu (submitted by qubodup)
+  https://opengameart.org/content/dripping-water-loop
+  Converted to mono, high-passed at 150 Hz and noise-reduced, sliced into six single drips
+  with short fade-outs, peak-normalised to -4 dB.

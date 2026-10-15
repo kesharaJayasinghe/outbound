@@ -2,7 +2,9 @@ extends Node3D
 
 ## A hidden grotto behind a waterfall. water_carver.gd leaves a ledge at the foot of the
 ## cliff behind the curtain; from it a short tunnel leads into a chamber with a still
-## pool, glowing crystals and dripping water.
+## pool, glowing crystals and dripping water you can hear, with an echo (sounds made
+## inside the cave also go through a reverb bus). Further in, the outdoor sounds (the
+## Ambience bus: surf, river, birds, wind, the waterfall) fade and are muffled.
 ##
 ## The terrain is a heightmap, which can't hold a cave, so inside a box around the cave
 ## the terrain is replaced: world_generator.gd leaves a hole in its mesh and collision,
@@ -23,6 +25,17 @@ const WALL_NOISE = 0.45        # Roughness of the walls (metres)
 const POOL_DEPTH = 0.7
 const CRYSTAL_CLUSTERS = 12
 const CRYSTAL_COLOR = Color(0.35, 0.8, 1.0)
+const DRIPS = [
+	preload("res://audio/cave/drip_1.wav"), preload("res://audio/cave/drip_2.wav"),
+	preload("res://audio/cave/drip_3.wav"), preload("res://audio/cave/drip_4.wav"),
+	preload("res://audio/cave/drip_5.wav"), preload("res://audio/cave/drip_6.wav"),
+]
+const DRIP_GAP = Vector2(0.4, 2.4)   # Seconds between drips (random in this range)
+const REVERB_BUS = &"Cave"
+const OUTDOOR_BUS = &"Ambience"
+const MUFFLED_DB = -24.0         # Outdoor sounds deep inside the cave
+const MUFFLED_CUTOFF = 500.0     # Hz
+const MUFFLE_DEPTH = 9.0         # Metres in from the cave mouth for full effect
 
 var gen: Node3D
 var cave: Dictionary
@@ -38,6 +51,14 @@ var axis_bend: Vector3
 var axis_end: Vector3
 var chamber_centre: Vector3
 var pool_centre: Vector3
+var drip_spots := PackedVector3Array()  # Chamber floor, where drips land besides the pool
+var drip_players: Array[AudioStreamPlayer3D] = []
+var drip_wait := 1.0
+var drip_rng := RandomNumberGenerator.new()
+var last_drip := -1
+var echo_box := AABB()   # Tunnel and chamber (world space)
+var enclosure := 0.0     # 0 outside .. 1 deep in the cave (where the camera is)
+var muffle: AudioEffectLowPassFilter
 
 
 ## Where the cave goes behind a waterfall ({top, dir, ledge, ...} from water_carver.gd),
@@ -111,6 +132,7 @@ func build(generator: Node3D, layout_: Dictionary, terrain_material: Material) -
 	_add_crystals(surface.inside)
 	_add_pool()
 	_add_drips()
+	_add_sound(surface.inside)
 
 
 # --- Shape -------------------------------------------------------------------------
@@ -366,6 +388,122 @@ func _vertex_color(p: Vector3, in_cave: bool) -> Color:
 	var into := (p - face).dot(forward)
 	# Alpha below 0.99 also tells the terrain shader this is cave rock (no grass)
 	return Color(0.5, 0.2, 0.0, lerpf(1.0, 0.06, smoothstep(1.0, 10.0, into)) * 0.98)
+
+
+# --- Sound -----------------------------------------------------------------------------
+
+## Dripping water, and an echo for everything heard inside the cave
+func _add_sound(spots: Array) -> void:
+	drip_rng.seed = gen.terrain_seed + 4111
+	for s in spots:
+		if (s[1] as Vector3).y > 0.7:  # Floor
+			drip_spots.append(s[0])
+	for k in 3:  # A few players, so drips can overlap as they ring out
+		var player := AudioStreamPlayer3D.new()
+		player.bus = &"SFX"
+		player.unit_size = 4.0
+		player.max_distance = 32.0
+		add_child(player)
+		drip_players.append(player)
+
+	# Sounds made inside the cave (drips, footsteps) also go to a reverb bus
+	var area := Area3D.new()
+	area.name = "Echo"
+	area.monitoring = false
+	area.reverb_bus_enabled = true
+	area.reverb_bus_name = _reverb_bus()
+	area.reverb_bus_amount = 0.55
+	area.reverb_bus_uniformity = 0.4
+	var lo := Vector3(INF, floor_y - 2.0, INF)
+	var hi := Vector3(-INF, floor_y + CHAMBER_CENTRE + CHAMBER_RADII.y + 1.0, -INF)
+	for p: Vector3 in [face, cave.bend, cave.chamber]:
+		var r := maxf(CHAMBER_RADII.x, CHAMBER_RADII.z) if p == cave.chamber else TUNNEL_RADIUS
+		lo = Vector3(minf(lo.x, p.x - r), lo.y, minf(lo.z, p.z - r))
+		hi = Vector3(maxf(hi.x, p.x + r), hi.y, maxf(hi.z, p.z + r))
+	var box := BoxShape3D.new()
+	box.size = hi - lo
+	echo_box = AABB(lo, hi - lo)
+	muffle = _muffle_filter()
+	var shape := CollisionShape3D.new()
+	shape.shape = box
+	area.position = (lo + hi) * 0.5
+	area.add_child(shape)
+	add_child(area)
+
+
+## The shared "Cave" bus: a fully wet, damped reverb that the echo area sends to
+static func _reverb_bus() -> StringName:
+	if AudioServer.get_bus_index(REVERB_BUS) < 0:
+		AudioServer.add_bus()
+		var i := AudioServer.bus_count - 1
+		AudioServer.set_bus_name(i, REVERB_BUS)
+		AudioServer.set_bus_send(i, &"Master")
+		var reverb := AudioEffectReverb.new()
+		reverb.room_size = 0.6
+		reverb.damping = 0.45
+		reverb.spread = 0.8
+		reverb.hipass = 0.15
+		reverb.dry = 0.0
+		reverb.wet = 1.0
+		AudioServer.add_bus_effect(i, reverb)
+	return REVERB_BUS
+
+
+## A low-pass filter on the outdoor-sound bus, wide open until someone goes in a cave
+static func _muffle_filter() -> AudioEffectLowPassFilter:
+	var bus := AudioServer.get_bus_index(OUTDOOR_BUS)
+	if bus < 0:
+		return null
+	for k in AudioServer.get_bus_effect_count(bus):
+		if AudioServer.get_bus_effect(bus, k) is AudioEffectLowPassFilter:
+			return AudioServer.get_bus_effect(bus, k)
+	var filter := AudioEffectLowPassFilter.new()
+	filter.cutoff_hz = 20000.0
+	AudioServer.add_bus_effect(bus, filter)
+	return filter
+
+
+## Fades and muffles the outdoor sounds by how far into the cave the camera is
+func _update_muffle(delta: float) -> void:
+	var camera := get_viewport().get_camera_3d()
+	if camera == null or muffle == null:
+		return
+	var at := camera.global_position
+	var target := 0.0
+	if echo_box.has_point(at):
+		target = smoothstep(0.5, MUFFLE_DEPTH, (at - face).dot(forward))
+	if target == 0.0 and enclosure == 0.0:
+		return  # Outside: leave the bus alone (another cave may be using it)
+	enclosure = move_toward(enclosure, target, delta * 1.5)
+	var bus := AudioServer.get_bus_index(OUTDOOR_BUS)
+	AudioServer.set_bus_volume_db(bus, lerpf(0.0, MUFFLED_DB, enclosure))
+	muffle.cutoff_hz = lerpf(20000.0, MUFFLED_CUTOFF, pow(enclosure, 0.5))
+
+
+func _process(delta: float) -> void:
+	_update_muffle(delta)
+	drip_wait -= delta
+	if drip_wait > 0.0 or drip_players.is_empty():
+		return
+	drip_wait = drip_rng.randf_range(DRIP_GAP.x, DRIP_GAP.y)
+	# Mostly into the pool, under the falling drops; sometimes onto the rock nearby
+	var at := pool_centre + Vector3(drip_rng.randf_range(-1.2, 1.2), 0.0, drip_rng.randf_range(-1.0, 1.0))
+	if not drip_spots.is_empty() and drip_rng.randf() < 0.3:
+		at = drip_spots[drip_rng.randi() % drip_spots.size()]
+	var pick := drip_rng.randi() % DRIPS.size()
+	if pick == last_drip:
+		pick = (pick + 1) % DRIPS.size()  # No immediate repeats
+	last_drip = pick
+	var player: AudioStreamPlayer3D = drip_players[0]
+	for p in drip_players:
+		if not p.playing:
+			player = p
+			break
+	player.stream = DRIPS[pick]
+	player.pitch_scale = drip_rng.randf_range(0.85, 1.2)
+	player.volume_db = drip_rng.randf_range(-4.0, 2.0)
+	player.global_position = at + Vector3.UP * 0.1
+	player.play()
 
 
 # --- Contents ------------------------------------------------------------------------

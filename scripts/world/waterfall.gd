@@ -32,6 +32,7 @@ func build(fall: Dictionary) -> void:
 	var roar := AudioStreamPlayer3D.new()
 	roar.name = "Roar"
 	roar.stream = ROAR
+	roar.bus = &"Ambience"  # Outdoor sound: muffled inside caves (cave.gd)
 	roar.pitch_scale = 0.7       # Deeper and heavier than the river's rapids
 	roar.volume_db = 6.0
 	roar.unit_size = 14.0

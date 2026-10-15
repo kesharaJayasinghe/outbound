@@ -91,7 +91,10 @@ particles, and the river-rush loop pitched down as the roar).
   COLOR.a < 0.99 marks cave rock (no grass) and fades ambient light (AO) with depth.
   `gen.is_underground(pos)` (below the heightmap) makes `water_depth_at` return 0 and stops
   swimming in caves under rivers. Footsteps on `CaveBody` are stone, and you can't build
-  underground.
+  underground. Drips (`audio/cave/`) play at random spots, mostly at the pool. An `Echo` Area3D
+  sends sounds made in the cave to a reverb bus (`Cave`, created in code). Deeper in, the
+  `Ambience` bus (all outdoor sound, including the waterfall roar) is turned down and low-passed,
+  following the camera. Keep new outdoor sounds on `Ambience` and close-up effects on `SFX`.
 - `vegetation.gd`: jittered-grid scattering into MultiMeshes chunked every `CHUNK_SIZE` m (a
   fixed size, so culling doesn't degrade on a bigger world), plus one shared
   `StaticBody3D` with shape owners for collision. Grass is a camera-following GPU field:
