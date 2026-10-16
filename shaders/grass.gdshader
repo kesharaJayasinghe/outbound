@@ -15,6 +15,10 @@ uniform float map_size = 257.0;
 uniform float spacing = 0.35;
 uniform float fade_start = 24.0;
 uniform float fade_end = 34.0;
+// Spots kept clear around small placed things (builder.gd): xy = world XZ, z = radius
+const int MAX_CLEARINGS = 16;
+uniform vec4 clearings[MAX_CLEARINGS];
+uniform int clearing_count = 0;
 
 uniform vec3 base_color : source_color = vec3(0.04, 0.10, 0.02);
 uniform vec3 tip_color : source_color = vec3(0.26, 0.50, 0.10);
@@ -58,6 +62,9 @@ void vertex() {
 	float dist = length(wxz - CAMERA_POSITION_WORLD.xz);
 	float fade = 1.0 - smoothstep(fade_start, fade_end, dist);
 	float s = fade * smoothstep(r4 * 0.9, r4 * 0.9 + 0.1, density) * (0.55 + 0.7 * r3) * (0.6 + 0.6 * mask);
+	for (int i = 0; i < clearing_count; i++) {
+		s *= smoothstep(clearings[i].z * 0.6, clearings[i].z, length(wxz - clearings[i].xy));
+	}
 
 	float ang = r1 * 6.2831;
 	mat2 rot = mat2(vec2(cos(ang), sin(ang)), vec2(-sin(ang), cos(ang)));

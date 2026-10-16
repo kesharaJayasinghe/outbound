@@ -30,6 +30,7 @@ var spawn := Vector2.INF
 var buckets := {}              # [mesh, chunk] -> {mesh, xforms, vis_end}
 var body: StaticBody3D
 var grass_root: Node3D
+var grass_material: ShaderMaterial
 # Handed to pickups.gd, which draws them (so single ones can be taken or knocked down)
 var fallen_coconuts: Array[Transform3D] = []
 var fallen_coconut_mesh: Mesh
@@ -351,6 +352,7 @@ func _build_grass() -> void:
 
 	var mat := ShaderMaterial.new()
 	mat.shader = GRASS_SHADER
+	grass_material = mat
 	mat.set_shader_parameter("heightmap", height_tex)
 	mat.set_shader_parameter("grass_mask", mask_tex)
 	mat.set_shader_parameter("max_height", gen.max_height)
@@ -382,3 +384,15 @@ func _build_grass() -> void:
 			mmi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 			mmi.position = Vector3((cx - GRASS_CHUNKS * 0.5) * chunk_world, 0.0, (cz - GRASS_CHUNKS * 0.5) * chunk_world)
 			grass_root.add_child(mmi)
+
+
+## Keeps the grass short around these spots: each is (x, z, radius) in world space.
+## Only the first MAX_CLEARINGS (grass.gdshader) are used.
+func set_grass_clearings(spots: Array[Vector3]) -> void:
+	if grass_material == null:
+		return
+	var packed: Array[Vector4] = []
+	for spot in spots.slice(0, 16):
+		packed.append(Vector4(spot.x, spot.y, spot.z, 0.0))
+	grass_material.set_shader_parameter("clearings", packed)
+	grass_material.set_shader_parameter("clearing_count", packed.size())

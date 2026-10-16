@@ -250,7 +250,8 @@ func _update_placement() -> void:
 	var aim := -cam.global_basis.z
 	var origin := player.global_position
 	var flat := Vector3(aim.x, 0.0, aim.z).normalized()
-	var offset := flat * MAX_DISTANCE
+	var reach: Vector2 = recipe.get("reach", Vector2(MIN_DISTANCE, MAX_DISTANCE))
+	var offset := flat * reach.y
 	var query := PhysicsRayQueryParameters3D.create(from, from + aim * AIM_RANGE)
 	query.exclude = [player.get_rid()]
 	var hit := player.get_world_3d().direct_space_state.intersect_ray(query)
@@ -259,7 +260,7 @@ func _update_placement() -> void:
 		offset.y = 0.0
 		if offset.length() < 0.01:
 			offset = flat
-		offset = offset.normalized() * clampf(offset.length(), MIN_DISTANCE, MAX_DISTANCE)
+		offset = offset.normalized() * clampf(offset.length(), reach.x, reach.y)
 	var centre := origin + offset
 
 	# Open side faces the player (the model's front is +Z)
@@ -283,6 +284,16 @@ func _update_placement() -> void:
 	# Level with the ground on flat land; on a slope, dig into the uphill side a little
 	# and let the downhill posts stretch
 	var base_y := maxf(lo, hi - UPHILL_SINK)
+	# Small things without posts (the radio) tilt to lie flat on the slope instead
+	var slope := 0.0
+	if recipe.has("max_slope"):
+		var d := 0.25
+		var normal := Vector3(gen.get_height(centre.x - d, centre.z) - gen.get_height(centre.x + d, centre.z), 2.0 * d,
+				gen.get_height(centre.x, centre.z - d) - gen.get_height(centre.x, centre.z + d)).normalized()
+		slope = normal.angle_to(Vector3.UP)
+		if slope > 0.001:
+			basis_ = Basis(Quaternion(Vector3.UP, normal)) * basis_
+		base_y = gen.get_height(centre.x, centre.z)
 	placement = Transform3D(basis_, Vector3(centre.x, base_y, centre.z))
 	ghost.global_transform = placement
 	_fit_posts(ghost, false)
@@ -292,7 +303,9 @@ func _update_placement() -> void:
 		problem = "Can't build in here"
 	elif wet:
 		problem = "Can't build in the water"
-	elif hi - lo > MAX_UNEVENNESS:
+	elif slope > recipe.get("max_slope", INF):
+		problem = "The ground is too steep here"
+	elif not recipe.has("max_slope") and hi - lo > MAX_UNEVENNESS:
 		problem = "The ground is too uneven here"
 	elif _blocked():
 		problem = "Something is in the way"
@@ -336,9 +349,12 @@ func _place() -> void:
 		var owner_id := body.create_shape_owner(body)
 		body.shape_owner_add_shape(owner_id, entry[1])
 		body.shape_owner_set_transform(owner_id, entry[0])
-	_toast("Built a %s" % recipe.name.to_lower())
+	if building.has_method(&"built"):
+		building.built()
+	_update_grass_clearings()
+	_toast(("Set down the %s" if recipe.cost.is_empty() else "Built a %s") % recipe.name.to_lower())
 
-	if not inventory.can_afford(recipe.cost):
+	if not inventory.can_afford(recipe.cost) or _at_limit(recipe):
 		_set_mode(Mode.IDLE)
 
 
@@ -416,9 +432,21 @@ func _open_menu(page: StringName, index := 0) -> void:
 			menu_target = _aimed_structure()
 			if menu_target:
 				var r := _recipe_of(menu_target)
-				menu_items.append({"label": "Take down " + r.get("name", "structure").to_lower(),
-						"detail": "Nothing to refund in free build." if inventory.free_build
-								else "Refunds " + RECIPES.describe_cost(r.get("cost", {})) + ".",
+				# The structure's own actions (e.g. the radio's switch); the menu stays open
+				# and refreshes so the rows show the new state
+				if menu_target.has_method(&"menu_actions"):
+					for row: Dictionary in menu_target.menu_actions():
+						var act: Callable = row.action
+						row.action = func() -> void:
+							act.call()
+							_open_menu(&"root", menu_index)
+						row.target = menu_target
+						menu_items.append(row)
+				var free: bool = r.get("cost", {}).is_empty()
+				var detail := "Nothing to refund in free build." if inventory.free_build \
+						else "Refunds " + RECIPES.describe_cost(r.get("cost", {})) + "."
+				menu_items.append({"label": ("Pick up " if free else "Take down ") + r.get("name", "structure").to_lower(),
+						"detail": "Pack it away to set it down somewhere else." if free else detail,
 						"action": _remove.bind(menu_target), "target": menu_target})
 		&"inventory":
 			menu_title.text = "Inventory"
@@ -432,11 +460,13 @@ func _open_menu(page: StringName, index := 0) -> void:
 		&"craft":
 			menu_title.text = "Craft"
 			for r: Dictionary in RECIPES.RECIPES:
-				var detail := RECIPES.describe_cost(r.cost)
-				if inventory.free_build:
+				var detail: String = r.get("about", RECIPES.describe_cost(r.cost))
+				if _at_limit(r):
+					detail = "You only have one. Pick it up to move it."
+				elif inventory.free_build and not r.cost.is_empty():
 					detail += "\nFree build: resources aren't needed yet."
-				menu_items.append({"label": r.name, "detail": detail,
-						"action": _choose.bind(r), "enabled": inventory.can_afford(r.cost)})
+				menu_items.append({"label": r.name, "detail": detail, "action": _choose.bind(r),
+						"enabled": inventory.can_afford(r.cost) and not _at_limit(r)})
 	_set_mode(Mode.MENU)
 	_select(index)
 
@@ -500,6 +530,31 @@ func _aimed_structure() -> Node3D:
 	return best
 
 
+## Trims the grass around placed builds whose recipe has a `grass_clearing` radius, so
+## small things like the radio don't vanish in it
+func _update_grass_clearings() -> void:
+	var vegetation := gen.get_node_or_null("Vegetation")
+	if vegetation == null:
+		return
+	var spots: Array[Vector3] = []
+	for building: Node3D in structures.get_children():
+		var r := _recipe_of(building)
+		if r.has("grass_clearing") and not building.is_queued_for_deletion():
+			spots.append(Vector3(building.global_position.x, building.global_position.z, r.grass_clearing))
+	vegetation.set_grass_clearings(spots)
+
+
+## True when as many of a recipe are placed as its `limit` allows
+func _at_limit(r: Dictionary) -> bool:
+	if not r.has("limit"):
+		return false
+	var placed := 0
+	for building: Node3D in structures.get_children():
+		if not building.is_queued_for_deletion() and building.get_meta(&"recipe", &"") == r.id:
+			placed += 1
+	return placed >= r.limit
+
+
 func _recipe_of(building: Node3D) -> Dictionary:
 	for r: Dictionary in RECIPES.RECIPES:
 		if r.id == building.get_meta(&"recipe", &""):
@@ -512,7 +567,9 @@ func _remove(building: Node3D) -> void:
 	inventory.refund(r.get("cost", {}))
 	_set_mode(Mode.IDLE)
 	building.queue_free()
-	_toast("Took down the %s" % r.get("name", "structure").to_lower())
+	_update_grass_clearings()
+	var verb := "Picked up" if r.get("cost", {}).is_empty() else "Took down"
+	_toast("%s the %s" % [verb, r.get("name", "structure").to_lower()])
 
 
 # --- HUD ---------------------------------------------------------------------

@@ -1,0 +1,153 @@
+[gd_scene load_steps=19 format=3]
+
+[ext_resource type="Script" path="res://scripts/build/radio.gd" id="1_radio"]
+
+[sub_resource type="StandardMaterial3D" id="M_case"]
+albedo_color = Color(0.24, 0.52, 0.5, 1)
+roughness = 0.55
+
+[sub_resource type="StandardMaterial3D" id="M_trim"]
+albedo_color = Color(0.85, 0.82, 0.74, 1)
+roughness = 0.5
+
+[sub_resource type="StandardMaterial3D" id="M_grille"]
+albedo_color = Color(0.13, 0.13, 0.12, 1)
+metallic = 0.4
+roughness = 0.6
+
+[sub_resource type="StandardMaterial3D" id="M_dial"]
+albedo_color = Color(0.93, 0.86, 0.62, 1)
+roughness = 0.3
+
+[sub_resource type="StandardMaterial3D" id="M_needle"]
+albedo_color = Color(0.8, 0.12, 0.08, 1)
+
+[sub_resource type="StandardMaterial3D" id="M_chrome"]
+albedo_color = Color(0.78, 0.78, 0.8, 1)
+metallic = 0.9
+roughness = 0.25
+
+[sub_resource type="BoxMesh" id="B_body"]
+material = SubResource("M_case")
+size = Vector3(0.36, 0.2, 0.11)
+
+[sub_resource type="BoxMesh" id="B_panel"]
+material = SubResource("M_trim")
+size = Vector3(0.34, 0.17, 0.006)
+
+[sub_resource type="CylinderMesh" id="C_grille"]
+material = SubResource("M_grille")
+top_radius = 0.066
+bottom_radius = 0.066
+height = 0.008
+radial_segments = 24
+rings = 1
+
+[sub_resource type="BoxMesh" id="B_dial"]
+material = SubResource("M_dial")
+size = Vector3(0.13, 0.045, 0.008)
+
+[sub_resource type="BoxMesh" id="B_needle"]
+material = SubResource("M_needle")
+size = Vector3(0.004, 0.036, 0.004)
+
+[sub_resource type="CylinderMesh" id="C_knob"]
+material = SubResource("M_grille")
+top_radius = 0.016
+bottom_radius = 0.019
+height = 0.022
+radial_segments = 16
+rings = 1
+
+[sub_resource type="BoxMesh" id="B_handle"]
+material = SubResource("M_chrome")
+size = Vector3(0.27, 0.016, 0.026)
+
+[sub_resource type="BoxMesh" id="B_upright"]
+material = SubResource("M_chrome")
+size = Vector3(0.016, 0.06, 0.026)
+
+[sub_resource type="CylinderMesh" id="C_antenna"]
+material = SubResource("M_chrome")
+top_radius = 0.0025
+bottom_radius = 0.005
+height = 0.42
+radial_segments = 8
+rings = 1
+
+[sub_resource type="SphereMesh" id="S_tip"]
+material = SubResource("M_chrome")
+radius = 0.007
+height = 0.014
+radial_segments = 8
+rings = 4
+
+[sub_resource type="BoxMesh" id="B_foot"]
+material = SubResource("M_grille")
+size = Vector3(0.05, 0.012, 0.09)
+
+[node name="Radio" type="Node3D"]
+script = ExtResource("1_radio")
+
+[node name="Body" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.112, 0)
+mesh = SubResource("B_body")
+
+[node name="Panel" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.112, 0.056)
+mesh = SubResource("B_panel")
+
+[node name="Grille" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.075, 0.108, 0.06)
+rotation = Vector3(1.5708, 0, 0)
+mesh = SubResource("C_grille")
+
+[node name="Dial" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.09, 0.14, 0.06)
+mesh = SubResource("B_dial")
+
+[node name="Needle" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.07, 0.14, 0.065)
+mesh = SubResource("B_needle")
+
+[node name="KnobTune" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.125, 0.07, 0.068)
+rotation = Vector3(1.5708, 0, 0)
+mesh = SubResource("C_knob")
+
+[node name="KnobVolume" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.06, 0.07, 0.068)
+rotation = Vector3(1.5708, 0, 0)
+mesh = SubResource("C_knob")
+
+[node name="Handle" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.274, 0)
+mesh = SubResource("B_handle")
+
+[node name="HandleLeft" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.127, 0.24, 0)
+mesh = SubResource("B_upright")
+
+[node name="HandleRight" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.127, 0.24, 0)
+mesh = SubResource("B_upright")
+
+[node name="AntennaPivot" type="Node3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.16, 0.212, -0.03)
+rotation = Vector3(0, 0, -0.55)
+
+[node name="Antenna" type="MeshInstance3D" parent="AntennaPivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.21, 0)
+mesh = SubResource("C_antenna")
+
+[node name="AntennaTip" type="MeshInstance3D" parent="AntennaPivot"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.42, 0)
+mesh = SubResource("S_tip")
+
+[node name="FootLeft" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.13, 0.006, 0)
+mesh = SubResource("B_foot")
+
+[node name="FootRight" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.13, 0.006, 0)
+mesh = SubResource("B_foot")

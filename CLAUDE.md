@@ -155,7 +155,19 @@ particles, and the river-rush loop pitched down as the roar).
   meshes named `Post*` down to the ground and generates convex collision from the other
   meshes (skipping `Lash*`). Placed builds go under `Structures` (with a `recipe` meta) and
   aren't saved yet. The menu's "Take down" row removes the build the camera faces and
-  refunds it.
+  refunds it. Optional recipe keys: `reach` (preview distance), `max_slope` (no posts: tilt to the
+  ground instead of the unevenness check), `limit` (how many can be placed), `about` (menu
+  text), `grass_clearing` (radius of trimmed grass, via `vegetation.set_grass_clearings`,
+  up to 16 spots in `grass.gdshader`). A placed scene's root can have `built()` (called after
+  placing; the preview never gets it) and `menu_actions()` (extra rows on the root page
+  while it's faced; the menu refreshes after each).
+- `build/radio.gd` (`models/radio.tscn`, a free recipe with `limit` 1): a playlist from
+  `audio/radio/` (track1, track2, each with a `volume` trim to even out loudness) played in
+  order and repeated, so the tracks must not loop on import (`edit/loop_mode=1`). Switching on
+  lands where the clock says the playlist is ("live"); skipping starts the next song. Both play
+  tuning static first. 3D on a `Radio` bus made in code (band-pass, EQ, compressor,
+  `BUS_BOOST` gain and a limiter), which sends to `Ambience`. It needs a big `unit_size` and the
+  boost to carry over the surf.
 - `scripts/ui/map_view.gd`: the map (opened from the interaction menu). Packs heights, the
   inland mask and water heights into a float texture for `shaders/map.gdshader`, which does
   the colouring, hill shading and contours; markers are drawn on a Control on top. It pauses

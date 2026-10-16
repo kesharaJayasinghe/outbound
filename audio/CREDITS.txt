@@ -53,3 +53,7 @@ birds/gull_1-7.wav
   and released them as CC0 ("no credit required").
   Converted to mono, high-passed at 300 Hz and noise-reduced, leading silence trimmed, short
   fade-outs, peak-normalised to -3 dB.
+
+radio/tuning.wav
+  Generated with ffmpeg (band-passed pink noise and a wobbling whistle): the static
+  between stations.

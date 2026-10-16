@@ -51,6 +51,9 @@ island with eroded mountains, beaches, jungle, wildlife ambience and a swimmable
   level enough. A preview shows green where it fits and red where it doesn't. On a slope the
   downhill posts stretch to reach the ground. Gathering isn't in yet, so building is free for
   now.
+- **Radio**: set your transistor radio down from the Craft page (it tilts to sit on a slope
+  and the grass around it gets trimmed). Face it and open the interaction menu to switch it on
+  or off, skip to the next song (it plays its playlist in order), or pick it up to move it.
 - **Interaction menu** (M), like GTA Online's: Map, Craft, plus actions for what's in front of
   you, such as taking down a shelter you face, which refunds its cost. Nothing is on screen
   until you open it.
