@@ -5,8 +5,8 @@ extends Node
 ## it again to put it away (empty-handed). The bar shows for a moment when something
 ## changes, then fades; while something's held, a small reminder stays in the corner.
 ##
-## Held stones sit in the right hand. Click to throw one where the camera aims, in a
-## slight arc: a stone that passes a coconut bunch knocks it down (pickups.gd), and one
+## Held stones sit in the right hand. Click to throw one where the camera aims: the player
+## turns and throws overhand (player.throw), and the stone leaves the hand in a slight arc: a stone that passes a coconut bunch knocks it down (pickups.gd), and one
 ## that lands near gulls on a beach sends them off (beach_birds.gd). Thrown stones are
 ## small rigid bodies that disappear a few seconds after landing.
 
@@ -40,6 +40,7 @@ var slots: Array[StringName] = []
 var selected := -1             # -1: empty-handed
 var held: MeshInstance3D       # What's drawn in the hand
 var cooldown := 0.0
+var released := false          # This throw's stone has left the hand (hide it until the next)
 var thrown: Array[Dictionary] = []   # {body, age, landed}
 
 var bar: HBoxContainer
@@ -110,8 +111,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT \
 			and Input.get_mouse_mode() == Input.MOUSE_MODE_CAPTURED and builder.mode == BUILDER.Mode.IDLE:
-		if _holding() == &"stone" and cooldown <= 0.0 and not player.is_busy():
-			_throw()
+		if _holding() == &"stone" and cooldown <= 0.0 and not player.is_busy() and not player.is_throwing():
+			var target := _aim_target()
+			if player.throw(target - player.global_position, _release):
+				cooldown = THROW_COOLDOWN
+				released = false
 			get_viewport().set_input_as_handled()
 
 
@@ -121,9 +125,8 @@ func _holding() -> StringName:
 
 # --- Throwing ----------------------------------------------------------------------
 
-func _throw() -> void:
-	cooldown = THROW_COOLDOWN
-	# Aim where the centre of the view points
+## Where the centre of the view points (or a coconut bunch close to that line)
+func _aim_target() -> Vector3:
 	var cam: Camera3D = player.camera
 	var from := cam.global_position
 	var aim := -cam.global_basis.z
@@ -137,12 +140,16 @@ func _throw() -> void:
 		var bunch: Vector3 = pickups.bunch_on_line(from, aim, reach, AIM_ASSIST)
 		if bunch != Vector3.INF:
 			target = bunch
+	return target
 
-	# From the right shoulder, turned towards the target
-	var to_target := Vector3(target.x - player.global_position.x, 0.0, target.z - player.global_position.z)
-	var facing := to_target.normalized() if to_target.length() > 0.1 else Vector3(aim.x, 0.0, aim.z).normalized()
-	var right := Vector3(-facing.z, 0.0, facing.x)
-	var start := player.global_position + Vector3.UP * 1.55 + right * 0.25 + facing * 0.3
+
+## The throw's release: launch the stone from the hand towards where the view points now
+func _release() -> void:
+	released = true
+	if _holding() != &"stone" or inventory.count(&"stone") <= 0:
+		return  # Put away mid-throw
+	var target := _aim_target()
+	var start := held.global_position
 	var offset := target - start
 	var time := maxf(offset.length() / THROW_SPEED, 0.05)
 	# Aim up just enough to drop onto the target
@@ -197,7 +204,9 @@ func _physics_process(delta: float) -> void:
 # --- HUD ---------------------------------------------------------------------------
 
 func _process(delta: float) -> void:
-	held.visible = _holding() == &"stone" and not player.is_busy()
+	if not player.is_throwing():
+		released = false
+	held.visible = _holding() == &"stone" and not player.is_busy() and not released
 	if held.visible:
 		var hand: Node3D = player.hand
 		var axes := hand.global_basis.orthonormalized()

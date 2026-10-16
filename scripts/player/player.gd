@@ -41,6 +41,13 @@ const ANIM_SIT_IDLE = "sit/idle"
 ## Bending down to take something off the ground with the right hand
 const PICK_ANIMS = preload("res://characters/human/pick_animations.res")
 const ANIM_PICK = "pick/up"
+## Overhand throw with the right hand, played on the upper body over whatever the legs do
+const THROW_ANIMS = preload("res://characters/human/throw_animations.res")
+const ANIM_THROW = "throw/overhand"
+const THROW_RELEASE = 0.42     # Fraction of the clip where the hand lets go (RELEASE_T in throw_clips.py)
+const THROW_FACE_UNTIL = 0.75  # Keep facing the throw until this far through
+const THROW_TURN_SPEED = 18.0  # Snappier than TURN_SPEED: the wind-up turns towards the target
+const UPPER_BODY = ["Spine", "Neck", "Head", "Shoulder", "Arm", "Hand"]  # Bones the throw drives (name contains)
 
 # Footsteps: each set lists its left-foot sounds first, then the same number of right-foot sounds
 const SOFT_STEPS = [
@@ -138,6 +145,9 @@ var pick_on_grab: Callable    # Called as the hand closes on it (the item leaves
 var pick_on_done: Callable    # Called as it's put away
 var held: MeshInstance3D      # The item while it's in the hand
 var hand: BoneAttachment3D
+var throw_time := -1.0        # Seconds into the throw clip; -1 when not throwing
+var throw_dir := Vector3.ZERO
+var throw_on_release: Callable
 var footprints: Node3D
 var inventory = INVENTORY.new()  ## Resources carried, spent on crafting (builder.gd)
 
@@ -214,11 +224,15 @@ func _physics_process(delta: float) -> void:
 
 	# Face the direction of travel (or the camera direction in first person)
 	var face_dir := forward if first_person else direction
+	var turn_speed := TURN_SPEED
 	if pick != Pick.NONE:
 		face_dir = pick_face
+	elif is_throwing() and throw_time < THROW_ANIMS.get_animation("overhand").length * THROW_FACE_UNTIL:
+		face_dir = throw_dir
+		turn_speed = THROW_TURN_SPEED
 	if face_dir.length_squared() > 0.001 and sit == Sit.NONE:
 		var target_yaw := atan2(-face_dir.x, -face_dir.z)
-		model.rotation.y = lerp_angle(model.rotation.y, target_yaw, 1.0 - exp(-TURN_SPEED * delta))
+		model.rotation.y = lerp_angle(model.rotation.y, target_yaw, 1.0 - exp(-turn_speed * delta))
 	_update_swim_pose(delta)
 
 
@@ -281,6 +295,8 @@ func _process(delta: float) -> void:
 		_update_sit_animation(delta)
 	if pick == Pick.PICKING:
 		_update_pick_animation(delta)
+	if is_throwing():
+		_update_throw_animation(delta)
 
 
 func _apply_view_mode() -> void:
@@ -334,6 +350,7 @@ func _update_swim_state() -> void:
 		sit = Sit.NONE
 		sit_blend = 0.0
 		_end_pick()
+		_end_throw()
 		if velocity.y < -2.5:
 			_play_splash(1.0, 1.0, true)  # Fell or jumped in
 		velocity.y *= 0.3
@@ -415,7 +432,7 @@ func _sit_down() -> void:
 	var depth := 0.0
 	if world and world.has_method("water_depth_at"):
 		depth = world.water_depth_at(global_position)
-	if swimming or pick != Pick.NONE or not is_on_floor() or get_floor_normal().y < SIT_MIN_FLOOR_Y \
+	if swimming or pick != Pick.NONE or is_throwing() or not is_on_floor() or get_floor_normal().y < SIT_MIN_FLOOR_Y \
 			or depth > SIT_MAX_DEPTH:
 		return
 	sit = Sit.SITTING_DOWN
@@ -483,7 +500,7 @@ func is_busy() -> bool:
 ## it's put away. Returns false (doing nothing) if the player is busy. Moving cancels the
 ## walk over, but not the pick itself.
 func pick_up(item: Transform3D, mesh: Mesh, on_grab: Callable, on_done: Callable) -> bool:
-	if is_busy():
+	if is_busy() or is_throwing():
 		return false
 	pick = Pick.APPROACH
 	pick_time = 0.0
@@ -556,6 +573,44 @@ func _stow() -> void:
 func _end_pick() -> void:
 	_stow()
 	pick = Pick.NONE
+
+
+# --- Throwing ------------------------------------------------------------------
+
+func is_throwing() -> bool:
+	return throw_time >= 0.0
+
+
+## Throws with the right hand (the upper body only, so it works on the move), turning to face
+## `dir`. Calls `on_release` as the hand lets go: that's when to launch whatever was in it.
+## Returns false (doing nothing) if busy or already throwing.
+func throw(dir: Vector3, on_release: Callable) -> bool:
+	if is_busy() or is_throwing():
+		return false
+	throw_time = 0.0
+	throw_dir = Vector3(dir.x, 0.0, dir.z).normalized()
+	throw_on_release = on_release
+	return true
+
+
+func _update_throw_animation(delta: float) -> void:
+	var length := THROW_ANIMS.get_animation("overhand").length
+	var before := throw_time / length
+	throw_time += delta
+	if before < THROW_RELEASE and throw_time / length >= THROW_RELEASE:
+		throw_on_release.call()
+	anim_tree.set("parameters/throw_seek/seek_request", minf(throw_time, length))
+	# Ease the overlay in and out; the clip starts and ends with the arms at rest anyway
+	var weight := clampf(minf(throw_time / 0.08, (length - throw_time) / 0.15), 0.0, 1.0)
+	anim_tree.set("parameters/upper_body/blend_amount", weight)
+	if throw_time >= length:
+		_end_throw()
+
+
+## Stops a throw (finished, or cut short by falling into deep water before the release)
+func _end_throw() -> void:
+	throw_time = -1.0
+	anim_tree.set("parameters/upper_body/blend_amount", 0.0)
 
 
 # --- Footsteps -----------------------------------------------------------------
@@ -664,11 +719,13 @@ func _floor_collider() -> Object:
 ##   tread / crawl clips (each sought to its phase), blended by speed --/
 ##   sit-down clip (sought, also backwards) / seated idle loop, blended -/
 ##   pick-up clip (sought) ----------------------------------------------/
+## and over all of it, the throw clip (sought) on the upper body bones (upper_body filter).
 func _build_animation_tree() -> AnimationTree:
 	var player: AnimationPlayer = model.find_child("AnimationPlayer", true, false)
 	player.add_animation_library("swim", SWIM_ANIMS)
 	player.add_animation_library("sit", SIT_ANIMS)
 	player.add_animation_library("pick", PICK_ANIMS)
+	player.add_animation_library("throw", THROW_ANIMS)
 	for anim_name in [ANIM_IDLE, ANIM_WALK, ANIM_RUN]:
 		player.get_animation(anim_name).loop_mode = Animation.LOOP_LINEAR
 	_flatten_jump_hips(player.get_animation(ANIM_JUMP))
@@ -722,7 +779,23 @@ func _build_animation_tree() -> AnimationTree:
 	graph.connect_node("state", 3, "sit")
 	graph.connect_node("pick_seek", 0, "pick")
 	graph.connect_node("state", 4, "pick_seek")
-	graph.connect_node("output", 0, "state")
+
+	# The throw replaces only the spine, head and arm tracks, so the legs keep walking or standing
+	var upper_body := AnimationNodeBlend2.new()
+	upper_body.filter_enabled = true
+	var throw_anim := THROW_ANIMS.get_animation("overhand")
+	for t in throw_anim.get_track_count():
+		var path := throw_anim.track_get_path(t)
+		var bone := String(path).get_slice(":", 1)
+		if UPPER_BODY.any(func(part: String) -> bool: return bone.contains(part)):
+			upper_body.set_filter_path(path, true)
+	graph.add_node("throw_clip", _clip(ANIM_THROW))
+	graph.add_node("throw_seek", AnimationNodeTimeSeek.new())
+	graph.add_node("upper_body", upper_body)
+	graph.connect_node("throw_seek", 0, "throw_clip")
+	graph.connect_node("upper_body", 0, "state")
+	graph.connect_node("upper_body", 1, "throw_seek")
+	graph.connect_node("output", 0, "upper_body")
 
 	var tree := AnimationTree.new()
 	tree.name = "AnimationTree"

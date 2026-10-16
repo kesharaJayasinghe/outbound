@@ -32,9 +32,10 @@ island with eroded mountains, beaches, jungle, wildlife ambience and a swimmable
   mesh and leaf texture is generated in code.
 - **Gathering and the hotbar**: gather loose rocks with E for 3–10 stones each. Gathered
   tools and materials fill a six-slot hotbar (keys 1–6; press a slot's key again to put it
-  away). Holding stones, an aiming dot appears; click to throw one where it points (it's ringed
-  when a coconut bunch is lined up): hit a coconut bunch on a beach palm
-  and its coconuts fall, and a stone landing near gulls sends them off.
+  away). Holding stones, an aiming dot appears; click and the player turns and throws one
+  overhand where it points, even on the move (the dot is ringed when a coconut bunch is lined
+  up): hit a coconut bunch on a beach palm and its coconuts fall, and a stone landing near
+  gulls sends them off.
 - **Seabirds**: flocks of gulls circle over the coasts, the cliffs by the waterfall and the
   islet, gliding and banking with bursts of flapping, and calling now and then. More gulls
   stand about on the beaches, walking and pecking at the sand. Get too close and they take

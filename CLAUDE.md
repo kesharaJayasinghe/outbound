@@ -167,7 +167,9 @@ particles, and the river-rush loop pitched down as the roar).
   phase the controller advances so splashes land on hand entry. Sitting (C) plays
   `sit_animations.res`: `down` (sought forwards, then backwards to stand up) and a seated
   `idle` loop. Picking up plays `pick_animations.res` (`up`; the right hand reaches `GRAB` in
-  `pick_clips.py`, which must match `PICK_REACH`). All are authored in `player-swim.blend`
+  `pick_clips.py`, which must match `PICK_REACH`). Throwing (`hotbar.gd` calls `player.throw`)
+  overlays `throw_animations.res` on the upper body only (a filtered Blend2 after the state
+  machine), turning to the aim; the stone launches from the hand at `THROW_RELEASE`. All are authored in `player-swim.blend`
   (outside the repo) by the text blocks versioned in `tools/blender/`, and converted with
   `tools/convert_anims.gd`, which maps the root bone between the glb and FBX skeletons and
   checks the result against Idle. The `player-animation` skill has the full

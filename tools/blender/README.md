@@ -10,6 +10,7 @@ blocks of the same names inside `player-swim.blend`. That file lives outside the
 | `sit_clips.py` | Two-bone IK and posing helpers; SitDown, SitIdle |
 | `swim_clips.py` | SwimTread, SwimCrawl |
 | `pick_clips.py` | PickUp |
+| `throw_clips.py` | Throw (overhand, upper body) |
 
 The scripts load each other by text-block name (`bpy.data.texts["swim_tools.py"]`), so run
 them inside the .blend, not as standalone files.

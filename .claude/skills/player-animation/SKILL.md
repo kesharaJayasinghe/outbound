@@ -14,6 +14,7 @@ no third-party licence. (Mixamo clips aren't CC0; don't use them.)
 | tread, crawl | `swim_animations.res` | SwimTread, SwimCrawl / `swim_tread`, `swim_crawl` | `swim_clips.py` |
 | down, idle | `sit_animations.res` | SitDown, SitIdle / `sit_down`, `sit_idle` | `sit_clips.py` |
 | up | `pick_animations.res` | PickUp / `pick_up` | `pick_clips.py` |
+| overhand | `throw_animations.res` | Throw / `throw` | `throw_clips.py` |
 
 ## The Blender file
 
@@ -111,6 +112,10 @@ Follow the swim, sit and pick code:
 - **Contacts in the world:** a contact the game relies on must match the clip. For example,
   `PICK_REACH` in metres is `GRAB` in `pick_clips.py` × 0.338. Keep the facing the target was
   worked out for. Turning to face the target afterwards swung the hand 10 cm off.
+- **Upper-body clips** that should play on the move (like the throw) don't get a state.
+  They go through the filtered `upper_body` Blend2 after the state machine: its filter takes
+  the bones whose names contain an entry of `UPPER_BODY`. Key the clip's hips and legs
+  neutral.
 - **Holding things:** to hold an item, use the `RightHand` `BoneAttachment3D` (`hand`). Place
   the item at its world transform, then `reparent(hand, true)`.
 
