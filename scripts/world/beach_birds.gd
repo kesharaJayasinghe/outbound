@@ -219,6 +219,21 @@ func _take_off(k: int, from: Vector3, first: bool) -> void:
 				get_tree().create_timer(rng.randf_range(0.1, 0.6), false).timeout.connect(_take_off.bind(other, from, false))
 
 
+## Something landed at `point` (a thrown stone): gulls on the ground within `radius` take
+## off, the nearest first with an alarm call.
+func spook(point: Vector3, radius: float) -> void:
+	var nearest := -1
+	var best := radius
+	for k in birds.size():
+		var b: Dictionary = birds[k]
+		var d := (b.pos as Vector3).distance_to(point)
+		if b.state < State.TAKE_OFF and d < best:
+			best = d
+			nearest = k
+	if nearest >= 0:
+		_take_off(nearest, point, true)
+
+
 ## Downhill along the ground: towards the water
 func _seaward(p: Vector3) -> Vector3:
 	var e := 3.0

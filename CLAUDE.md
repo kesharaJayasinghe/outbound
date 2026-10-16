@@ -117,13 +117,25 @@ particles, and the river-rush loop pitched down as the roar).
   transform and `CROWN_SWAY` as its sway weight, so it moves exactly with the top of the trunk
   in the bark shader's wind. Coconut placement uses its own RNG (`coco_rng`), so it never shifts
   the tree layout. Keep it that way for future additions to the scatter passes.
-- `pickups.gd`: things the player can pick up, for now the fallen coconuts (vegetation hands
-  over `fallen_coconuts` and the mesh, so they're out of its chunked batches). One MultiMesh;
+- `pickups.gd`: things the player can pick up or knock down. Vegetation hands over the fallen
+  coconuts, loose rocks (the "odd lone rock" scatter branch, with their collider owner ids) and
+  the coconut bunches, so they're out of its chunked batches. There's one MultiMesh per kind
+  (mesh). Rocks give `STONES_PER_METRE` × size stones, and the player lifts a hand-sized stone off
+  the rock. `knock(point)` drops a bunch's coconuts (meta `nuts` on the cluster mesh), which fall
+  and then become pickable; their MultiMesh slots are pooled. `bunch_on_line` is the aim assist
+  for throws, since bunches have no collision. For each item,
   E calls `player.pick_up`, which walks to a spot set by `PICK_REACH`, plays the pick clip and
   calls back: on the grab the instance is hidden (zero scale) and the player draws the item on
   a `RightHand` BoneAttachment3D; when it's put away it goes into `player.inventory`. It grows back after
   `REGROW_TIME` when the player is out of sight range. The prompt and toast use the builder's
   HUD. The builder's menu has an Inventory page.
+- `player/hotbar.gd`: six slots filled automatically from the inventory with EQUIPPABLE ids.
+  Keys 1–6 select, and the same key again holsters. The held item is drawn at `player.hand`
+  as a top-level node, because the hand bone carries the model's 0.338 scale. Clicking throws a
+  stone: a RigidBody aimed at the camera ray hit (or a bunch on the line), with an arc
+  compensating for gravity. In flight it calls `pickups.knock`, and on its first contact it
+  calls `beach_birds.spook`. The bar fades after `SHOW_TIME`; a corner reminder stays while
+  something is held.
 - `vegetation.gd`: jittered-grid scattering into MultiMeshes chunked every `CHUNK_SIZE` m (a
   fixed size, so culling doesn't degrade on a bigger world), plus one shared
   `StaticBody3D` with shape owners for collision. Grass is a camera-following GPU field:

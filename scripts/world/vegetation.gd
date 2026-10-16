@@ -30,8 +30,13 @@ var spawn := Vector2.INF
 var buckets := {}              # [mesh, chunk] -> {mesh, xforms, vis_end}
 var body: StaticBody3D
 var grass_root: Node3D
-var fallen_coconuts: Array[Transform3D] = []  # Handed to pickups.gd, which draws them
+# Handed to pickups.gd, which draws them (so single ones can be taken or knocked down)
+var fallen_coconuts: Array[Transform3D] = []
 var fallen_coconut_mesh: Mesh
+var coconut_bunches: Array[Dictionary] = []  # {kind (index into coconut_cluster_meshes), xform}
+var coconut_cluster_meshes: Array[Mesh] = []
+var loose_rocks: Array[Dictionary] = []      # {kind (index into rock_meshes), xform, size, collider}
+var rock_meshes: Array[Mesh] = []
 
 
 func build(generator: Node3D) -> void:
@@ -113,10 +118,11 @@ func _add(mesh: Mesh, xform: Transform3D, vis_end := 0.0) -> void:
 	buckets[key].xforms.append(xform)
 
 
-func _add_collider(shape: Shape3D, xform: Transform3D) -> void:
+func _add_collider(shape: Shape3D, xform: Transform3D) -> int:
 	var owner_id := body.create_shape_owner(body)
 	body.shape_owner_add_shape(owner_id, shape)
 	body.shape_owner_set_transform(owner_id, xform)
+	return owner_id
 
 
 func _flush_buckets() -> void:
@@ -185,6 +191,7 @@ func _scatter_trees() -> void:
 		clusters.append(ProcMesh.coconut_cluster(coco_rng, palm.get_meta(&"crown"), green_husk))
 	var fallen := ProcMesh.fallen_coconut(coco_rng, green_husk)
 	fallen_coconut_mesh = fallen
+	coconut_cluster_meshes = clusters
 
 	if gen.tree_density <= 0.0:
 		return
@@ -219,7 +226,7 @@ func _scatter_trees() -> void:
 			_add(palms[kind], xform)
 			# Coconuts on palms that stand on the beach sand
 			if above < gen.beach_height + 0.3 and coco_rng.randf() < COCONUT_CHANCE:
-				_add(clusters[kind], xform, 180.0)
+				coconut_bunches.append({"kind": kind, "xform": xform})
 				if coco_rng.randf() < FALLEN_CHANCE:
 					for n in coco_rng.randi_range(1, 2):
 						var at := Vector3(x, 0.0, z) + Vector3.FORWARD.rotated(Vector3.UP, coco_rng.randf() * TAU) * coco_rng.randf_range(0.7, 2.2)
@@ -274,6 +281,7 @@ func _scatter_rocks() -> void:
 	var meshes: Array[Mesh] = []
 	for i in 5:
 		meshes.append(ProcMesh.rock(rng, mat))
+	rock_meshes = meshes
 
 	if gen.rock_density <= 0.0:
 		return
@@ -285,6 +293,7 @@ func _scatter_rocks() -> void:
 		if above < -1.5:
 			return
 		var size := 0.0
+		var loose := false   # Lone rocks can be gathered for stones (pickups.gd)
 		var r := rng.randf()
 		var boulder_p := smoothstep(0.18, 0.4, slope) * 0.35
 		var pebble_p: float = gen.flow_map[i] * 0.2 + (0.15 if above < 1.5 else 0.0) + 0.04
@@ -294,6 +303,7 @@ func _scatter_rocks() -> void:
 			size = rng.randf_range(0.12, 0.45)        # Pebbles in channels and on beaches
 		elif r < boulder_p + pebble_p + 0.02:
 			size = rng.randf_range(0.4, 1.3)          # The odd lone rock
+			loose = true
 		else:
 			return
 		if size > 1.0 and _near_spawn(x, z):
@@ -304,11 +314,16 @@ func _scatter_rocks() -> void:
 		var rot := align * Basis(Vector3.UP, rng.randf() * TAU)
 		rot = rot.scaled(Vector3(size, size * rng.randf_range(0.7, 1.1), size * rng.randf_range(0.8, 1.3)))
 		var origin := Vector3(x, h - size * 0.15, z)
-		_add(meshes[rng.randi() % meshes.size()], Transform3D(rot, origin), 0.0 if size > 1.0 else 160.0)
+		var kind := rng.randi() % meshes.size()
+		if not loose:
+			_add(meshes[kind], Transform3D(rot, origin), 0.0 if size > 1.0 else 160.0)
+		var collider := -1
 		if size > 1.0:
 			var col := SphereShape3D.new()
 			col.radius = size * 0.7
-			_add_collider(col, Transform3D(Basis(), origin + Vector3.UP * size * 0.05))
+			collider = _add_collider(col, Transform3D(Basis(), origin + Vector3.UP * size * 0.05))
+		if loose:
+			loose_rocks.append({"kind": kind, "xform": Transform3D(rot, origin), "size": size, "collider": collider})
 	)
 
 

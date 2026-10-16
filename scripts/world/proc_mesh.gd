@@ -234,12 +234,15 @@ const CROWN_SWAY = 0.5  # The palm trunk's sway weight at the top (palm's `sway`
 static func coconut_cluster(rng: RandomNumberGenerator, crown: Vector3, material: Material) -> ArrayMesh:
 	var b := Builder.new()
 	var count := rng.randi_range(3, 6)
+	var nuts := PackedVector3Array()
 	for k in count:
 		var az := TAU * k / count + rng.randf_range(-0.3, 0.3)
 		var at := crown + Vector3(cos(az) * 0.3, -0.42 - rng.randf_range(0.0, 0.2), sin(az) * 0.3)
 		_coconut(b, rng, at, CROWN_SWAY, 1.25)
+		nuts.append(at)
 	var mesh := ArrayMesh.new()
 	b.commit(mesh, material)
+	mesh.set_meta(&"nuts", nuts)  # Where each coconut hangs, for knocking them down (pickups.gd)
 	return mesh
 
 

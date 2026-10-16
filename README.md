@@ -30,6 +30,10 @@ island with eroded mountains, beaches, jungle, wildlife ambience and a swimmable
   green coconuts, with more lying in the sand underneath. Walk up to a fallen coconut and press
   E: the player steps over, bends down and picks it up; it grows back after a while. It all sways in shared wind, and every
   mesh and leaf texture is generated in code.
+- **Gathering and the hotbar**: gather loose rocks with E for 3–10 stones each. Gathered
+  tools and materials fill a six-slot hotbar (keys 1–6; press a slot's key again to put it
+  away). Holding stones, click to throw one where you aim: hit a coconut bunch on a beach palm
+  and its coconuts fall, and a stone landing near gulls sends them off.
 - **Seabirds**: flocks of gulls circle over the coasts, the cliffs by the waterfall and the
   islet, gliding and banking with bursts of flapping, and calling now and then. More gulls
   stand about on the beaches, walking and pecking at the sand. Get too close and they take
@@ -70,7 +74,9 @@ The island loads from the baked files in `world/`, so startup is quick.
 | Space | Jump |
 | V | Toggle first / third person |
 | C | Sit down on the ground / get up (moving or jumping also gets up) |
-| E | Pick up (when a prompt shows) |
+| E | Pick up / gather (when a prompt shows) |
+| 1–6 | Hotbar: hold that slot's item; the same key again puts it away |
+| Click | Throw a stone (while holding stones) |
 | M | Interaction menu: scroll (mouse wheel or two-finger trackpad) selects, click confirms, right-click goes back |
 | Click / Right-click | Build / back to the menu, while placing |
 | Scroll / R | Rotate the preview 15° / 90°, while placing |

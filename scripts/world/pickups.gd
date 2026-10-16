@@ -1,59 +1,138 @@
 extends Node3D
 
-## Things lying about that the player can pick up: for now, the coconuts fallen under the
-## beach palms (placed by vegetation.gd). Walk up to one and a prompt appears
-## ("E  Pick up coconut"); the player then bends down and picks it up (player.pick_up),
-## adding it to the inventory. A picked
-## coconut grows back after REGROW_TIME, but only while the player is well away, so they
-## never see one appear. All the coconuts are one MultiMesh; a picked one is hidden by
-## giving it a zero scale.
+## Things lying about that the player can pick up, and the coconut bunches on the beach
+## palms (all handed over by vegetation.gd):
+##   - fallen coconuts: "E  Pick up coconut" (+1 coconut)
+##   - loose rocks: "E  Gather rock" (+3..10 stones, by size); the player lifts a stone off
+##     it and the rock is gone
+##   - coconut bunches: hit one with a thrown stone (hotbar.gd) and its coconuts fall to
+##     the ground, to be picked up like the fallen ones
+## Walk up to something and a prompt appears; the player then bends down and picks it up
+## (player.pick_up), and it goes into the inventory. Taken things come back after
+## REGROW_TIME, but only while the player is well away, so they never see it happen.
+## Each kind of thing is one MultiMesh; a taken one is hidden by giving it a zero scale.
 
 const BUILDER = preload("res://scripts/build/builder.gd")
 
 const PICK_RANGE = 1.8         # Metres, horizontally, from the player
 const REGROW_TIME = 600.0      # Seconds
-const REGROW_CLEARANCE = 40.0  # Grow back only when the player is at least this far away
+const REGROW_CLEARANCE = 40.0  # Come back only when the player is at least this far away
+const STONES_PER_METRE = 7.5   # A rock gives this many stones per metre of size (3..10)
+const HELD_STONE = 0.13        # Size of the stone the player lifts off a rock (metres)
+const KNOCK_RADIUS = 0.9       # A stone this close to a bunch knocks it down
+const GRAVITY = 9.8
+
+enum State { THERE, TAKEN, FALLING, SPARE }
 
 var gen: Node3D
 var player: Node3D
 var builder: Node
-var items: Array[Dictionary] = []   # {xform, id, name, picked_at (-1 while it's there)}
-var multimesh := MultiMesh.new()
+var vegetation: Node
+## One per kind of thing: {mesh, multimesh, next (first unused slot)}
+var kinds: Array[Dictionary] = []
+## Everything that can be picked up: {kind, slot (instance in the kind's MultiMesh), xform,
+## id, name, amount, state, taken_at, collider, regrows, velocity}
+var items: Array[Dictionary] = []
+## Coconut bunches on palms: {kind, slot, xform, nuts (world positions), down_at (-1 while up)}
+var bunches: Array[Dictionary] = []
+var coconut_kind := -1
+var spare_coconuts: Array[int] = []   # Free slots in the coconut MultiMesh, for knocked-down ones
 var prompt: Label
 var nearest := -1
 var clock := 0.0
 var regrow_check := 0.0
 
 
-func setup(generator: Node3D, player_node: Node3D, vegetation: Node, builder_node: Node) -> void:
+func setup(generator: Node3D, player_node: Node3D, vegetation_node: Node, builder_node: Node) -> void:
 	gen = generator
 	player = player_node
+	vegetation = vegetation_node
 	builder = builder_node
 	builder._ensure_action(&"interact", KEY_E, JOY_BUTTON_X)
-	for xform: Transform3D in vegetation.fallen_coconuts:
-		items.append({"xform": xform, "id": &"coconut", "name": "coconut", "picked_at": -1.0})
 
-	multimesh.transform_format = MultiMesh.TRANSFORM_3D
-	multimesh.mesh = vegetation.fallen_coconut_mesh
-	multimesh.instance_count = items.size()
-	for k in items.size():
-		multimesh.set_instance_transform(k, items[k].xform)
-	var instance := MultiMeshInstance3D.new()
-	instance.name = "Coconuts"
-	instance.multimesh = multimesh
-	# No visibility range: Godot measures it to the middle of the whole MultiMesh, and these
-	# are spread along every beach, so it would hide them all. A few dozen tiny meshes cost
-	# nothing to draw anyway.
-	add_child(instance)
+	# Fallen coconuts, with spare room for the ones knocked out of the palms
+	var nut_count := 0
+	for b in vegetation.coconut_bunches:
+		nut_count += (vegetation.coconut_cluster_meshes[b.kind].get_meta(&"nuts") as PackedVector3Array).size()
+	var fallen: Array[Transform3D] = vegetation.fallen_coconuts
+	coconut_kind = _add_kind(vegetation.fallen_coconut_mesh, fallen.size() + nut_count)
+	for xform in fallen:
+		_add_item(coconut_kind, xform, &"coconut", "coconut", 1, -1, true)
+	for k in nut_count:
+		spare_coconuts.append(fallen.size() + k)
 
-	# The prompt, just above the builder's status line
+	# Loose rocks, one MultiMesh per rock shape
+	var rock_kinds: Array[int] = []
+	for r in vegetation.rock_meshes.size():
+		var count := 0
+		for rock in vegetation.loose_rocks:
+			if rock.kind == r:
+				count += 1
+		rock_kinds.append(_add_kind(vegetation.rock_meshes[r], count))
+	for rock: Dictionary in vegetation.loose_rocks:
+		var stones := clampi(roundi(rock.size * STONES_PER_METRE), 3, 10)
+		_add_item(rock_kinds[rock.kind], rock.xform, &"stone", "rock", stones, rock.collider, true)
+
+	# Coconut bunches, one MultiMesh per palm shape (they sway with their palm)
+	var bunch_kinds: Array[int] = []
+	for c in vegetation.coconut_cluster_meshes.size():
+		var count := 0
+		for b in vegetation.coconut_bunches:
+			if b.kind == c:
+				count += 1
+		bunch_kinds.append(_add_kind(vegetation.coconut_cluster_meshes[c], count))
+	for b: Dictionary in vegetation.coconut_bunches:
+		var kind: int = bunch_kinds[b.kind]
+		var slot: int = kinds[kind].next
+		kinds[kind].next = slot + 1
+		var xform: Transform3D = b.xform
+		var nuts := PackedVector3Array()
+		for p in (vegetation.coconut_cluster_meshes[b.kind].get_meta(&"nuts") as PackedVector3Array):
+			nuts.append(xform * p)
+		(kinds[kind].multimesh as MultiMesh).set_instance_transform(slot, xform)
+		bunches.append({"kind": kind, "slot": slot, "xform": xform, "nuts": nuts, "down_at": -1.0})
+
+	# The prompt, above the hotbar and the builder's status line
 	prompt = builder._hud_label(Color(1, 1, 1, 0.9))
 	prompt.set_anchors_and_offsets_preset(Control.PRESET_CENTER_BOTTOM)
 	prompt.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	prompt.grow_vertical = Control.GROW_DIRECTION_BEGIN
-	prompt.offset_bottom = -80
+	prompt.offset_bottom = -150
 	prompt.visible = false
 	builder.hud.add_child(prompt)
+
+
+func _add_kind(mesh: Mesh, capacity: int) -> int:
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = mesh
+	mm.instance_count = capacity
+	for k in capacity:
+		mm.set_instance_transform(k, _hidden(Vector3.ZERO))
+	var instance := MultiMeshInstance3D.new()
+	instance.multimesh = mm
+	# No visibility range: Godot measures it to the middle of the whole MultiMesh, and these
+	# are spread across the island, so it would hide them all. They're cheap to draw anyway.
+	add_child(instance)
+	kinds.append({"mesh": mesh, "multimesh": mm, "next": 0})
+	return kinds.size() - 1
+
+
+func _add_item(kind: int, xform: Transform3D, id: StringName, name_: String, amount: int, collider: int, regrows: bool) -> void:
+	var slot: int = kinds[kind].next
+	kinds[kind].next = slot + 1
+	(kinds[kind].multimesh as MultiMesh).set_instance_transform(slot, xform)
+	items.append({"kind": kind, "slot": slot, "xform": xform, "id": id, "name": name_, "amount": amount,
+			"state": State.THERE, "taken_at": -1.0, "collider": collider, "regrows": regrows,
+			"velocity": Vector3.ZERO})
+
+
+static func _hidden(at: Vector3) -> Transform3D:
+	return Transform3D(Basis.from_scale(Vector3.ZERO), at)
+
+
+func _show(item: Dictionary, xform: Transform3D) -> void:
+	(kinds[item.kind].multimesh as MultiMesh).set_instance_transform(item.slot, xform)
 
 
 func _process(delta: float) -> void:
@@ -62,29 +141,44 @@ func _process(delta: float) -> void:
 	if regrow_check <= 0.0:
 		regrow_check = 1.0
 		_regrow()
+	_fall(delta)
 
-	# The closest coconut within reach, if the player isn't busy in a menu
+	# The closest thing within reach (big rocks: from their edge), unless the player is busy
 	nearest = -1
 	var at := player.global_position
-	var best := PICK_RANGE
+	var best := INF
 	for k in items.size():
 		var item: Dictionary = items[k]
-		if item.picked_at >= 0.0:
+		if item.state != State.THERE:
 			continue
-		var p: Vector3 = (item.xform as Transform3D).origin
-		var d := Vector2(p.x - at.x, p.z - at.z).length()
-		if d < best and absf(p.y - at.y) < 1.5:
+		var xform: Transform3D = item.xform
+		var p := xform.origin
+		var edge := xform.basis.get_scale().x * 0.5 if item.id == &"stone" else 0.0
+		var d := Vector2(p.x - at.x, p.z - at.z).length() - edge
+		if d < PICK_RANGE and d < best and absf(p.y - at.y) < 1.8:
 			best = d
 			nearest = k
 	var offer: bool = nearest >= 0 and builder.mode == BUILDER.Mode.IDLE and not player.is_busy()
 	prompt.visible = offer
 	if offer:
-		prompt.text = "E  Pick up %s" % items[nearest].name
+		var item: Dictionary = items[nearest]
+		prompt.text = ("E  Gather rock  (+%d stones)" % item.amount) if item.id == &"stone" else ("E  Pick up %s" % item.name)
 
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed(&"interact") and nearest >= 0 and builder.mode == BUILDER.Mode.IDLE:
-		if player.pick_up(items[nearest].xform, multimesh.mesh, _lift.bind(nearest), _collect.bind(nearest)):
+		var item: Dictionary = items[nearest]
+		var take: Transform3D = item.xform
+		var mesh: Mesh = kinds[item.kind].mesh
+		if item.id == &"stone":
+			# Lift a hand-sized stone off the near side of the rock
+			var xform: Transform3D = item.xform
+			var size := xform.basis.get_scale().x
+			var to_player := Vector3(player.global_position.x - xform.origin.x, 0.0, player.global_position.z - xform.origin.z).normalized()
+			var at := xform.origin + to_player * size * 0.45
+			at.y = gen.get_height(at.x, at.z) + 0.03
+			take = Transform3D(xform.basis.orthonormalized().scaled(Vector3.ONE * HELD_STONE), at)
+		if player.pick_up(take, mesh, _lift.bind(nearest), _collect.bind(nearest)):
 			nearest = -1
 		get_viewport().set_input_as_handled()
 
@@ -92,24 +186,122 @@ func _unhandled_input(event: InputEvent) -> void:
 ## The player's hand has it: take it off the ground (the player draws it in hand now)
 func _lift(k: int) -> void:
 	var item: Dictionary = items[k]
-	item.picked_at = clock
-	multimesh.set_instance_transform(k, Transform3D(Basis.from_scale(Vector3.ZERO), (item.xform as Transform3D).origin))
+	item.state = State.TAKEN
+	item.taken_at = clock
+	_show(item, _hidden((item.xform as Transform3D).origin))
+	if item.collider >= 0:
+		vegetation.body.shape_owner_set_disabled(item.collider, true)
 
 
 func _collect(k: int) -> void:
 	var item: Dictionary = items[k]
 	var inventory = player.inventory
-	inventory.add(item.id, 1)
-	builder._toast("+1 %s  (%d)" % [String(item.name).capitalize(), inventory.count(item.id)])
+	inventory.add(item.id, item.amount)
+	builder._toast("+%d %s  (%d)" % [item.amount, _item_name(item.id, item.amount), inventory.count(item.id)])
+	if not item.regrows:
+		# A knocked-down coconut: its slot goes back for the next bunch
+		item.state = State.SPARE
+		spare_coconuts.append(item.slot)
+
+
+static func _item_name(id: StringName, amount: int) -> String:
+	match id:
+		&"stone":
+			return "Stone" if amount == 1 else "Stones"
+		&"coconut":
+			return "Coconut" if amount == 1 else "Coconuts"
+	return String(id).capitalize()
+
+
+## The middle of the closest standing coconut bunch within `tolerance` metres of a line of
+## sight (from `from` along `dir`, up to `reach`), or Vector3.INF. Bunches have no
+## collision, so a throw aims at them this way.
+func bunch_on_line(from: Vector3, dir: Vector3, reach: float, tolerance: float) -> Vector3:
+	var best := Vector3.INF
+	var best_along := reach
+	for b in bunches:
+		if b.down_at >= 0.0:
+			continue
+		var centre := _bunch_centre(b)
+		var along := (centre - from).dot(dir)
+		if along < 1.0 or along > best_along:
+			continue
+		if (from + dir * along).distance_to(centre) < tolerance:
+			best_along = along
+			best = centre
+	return best
+
+
+func _bunch_centre(b: Dictionary) -> Vector3:
+	var centre := Vector3.ZERO
+	for p in (b.nuts as PackedVector3Array):
+		centre += p
+	return centre / (b.nuts as PackedVector3Array).size()
+
+
+## A thrown stone at `point`: knocks down a coconut bunch it passes close to, dropping its
+## coconuts. Returns true if it did.
+func knock(point: Vector3) -> bool:
+	for b in bunches:
+		if b.down_at >= 0.0:
+			continue
+		var nuts: PackedVector3Array = b.nuts
+		var centre := _bunch_centre(b)
+		if centre.distance_to(point) > KNOCK_RADIUS:
+			continue
+		b.down_at = clock
+		(kinds[b.kind].multimesh as MultiMesh).set_instance_transform(b.slot, _hidden(centre))
+		for p in nuts:
+			if spare_coconuts.is_empty():
+				break
+			var slot: int = spare_coconuts.pop_back()
+			var xform := Transform3D(Basis(Vector3.UP, randf() * TAU), p)
+			(kinds[coconut_kind].multimesh as MultiMesh).set_instance_transform(slot, xform)
+			items.append({"kind": coconut_kind, "slot": slot, "xform": xform, "id": &"coconut", "name": "coconut",
+					"amount": 1, "state": State.FALLING, "taken_at": -1.0, "collider": -1, "regrows": false,
+					"velocity": Vector3(randf_range(-1.2, 1.2), randf_range(0.0, 1.0), randf_range(-1.2, 1.2))})
+		return true
+	return false
+
+
+## Knocked-down coconuts drop to the ground, bounce a little and come to rest
+func _fall(delta: float) -> void:
+	for item in items:
+		if item.state != State.FALLING:
+			continue
+		var v: Vector3 = item.velocity
+		v.y -= GRAVITY * delta
+		var xform: Transform3D = item.xform
+		var p := xform.origin + v * delta
+		var ground: float = gen.get_height(p.x, p.z)
+		if p.y <= ground:
+			p.y = ground
+			if absf(v.y) < 1.5:
+				item.state = State.THERE
+				item.xform = Transform3D(Basis(Vector3.UP, randf() * TAU), Vector3(p.x, ground - 0.01, p.z))
+				_show(item, item.xform)
+				continue
+			v = Vector3(v.x * 0.5, -v.y * 0.3, v.z * 0.5)
+		item.velocity = v
+		item.xform = Transform3D(xform.basis.rotated(Vector3.RIGHT, delta * 6.0), p)
+		_show(item, item.xform)
 
 
 func _regrow() -> void:
 	var at := player.global_position
-	for k in items.size():
-		var item: Dictionary = items[k]
-		if item.picked_at < 0.0 or clock - item.picked_at < REGROW_TIME:
+	for item in items:
+		if item.state != State.TAKEN or not item.regrows or clock - item.taken_at < REGROW_TIME:
 			continue
 		if (item.xform as Transform3D).origin.distance_to(at) < REGROW_CLEARANCE:
 			continue
-		item.picked_at = -1.0
-		multimesh.set_instance_transform(k, item.xform)
+		item.state = State.THERE
+		_show(item, item.xform)
+		if item.collider >= 0:
+			vegetation.body.shape_owner_set_disabled(item.collider, false)
+	for b in bunches:
+		if b.down_at < 0.0 or clock - b.down_at < REGROW_TIME:
+			continue
+		if (b.xform as Transform3D).origin.distance_to(at) < REGROW_CLEARANCE:
+			continue
+		b.down_at = -1.0
+		(kinds[b.kind].multimesh as MultiMesh).set_instance_transform(b.slot, b.xform)
