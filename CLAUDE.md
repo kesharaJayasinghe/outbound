@@ -112,6 +112,11 @@ particles, and the river-rush loop pitched down as the roar).
   the gull mesh (`birds.gd` `_bird_mesh`, which has legs) and `bird.gdshader`, where
   INSTANCE_CUSTOM.a folds the wings and drops the legs, and .b is the walking speed on the
   ground. Only wing triangles carry UV2.x: anything with UV2.x > 0 flaps and folds.
+- Coconuts (`vegetation.gd`, `proc_mesh.gd`): `palm()` stores its crown position as mesh meta
+  (`crown`). Each palm shape gets a matching `coconut_cluster` mesh, drawn with the palm's own
+  transform and `CROWN_SWAY` as its sway weight, so it moves exactly with the top of the trunk
+  in the bark shader's wind. Coconut placement uses its own RNG (`coco_rng`), so it never shifts
+  the tree layout. Keep it that way for future additions to the scatter passes.
 - `vegetation.gd`: jittered-grid scattering into MultiMeshes chunked every `CHUNK_SIZE` m (a
   fixed size, so culling doesn't degrade on a bigger world), plus one shared
   `StaticBody3D` with shape owners for collision. Grass is a camera-following GPU field:

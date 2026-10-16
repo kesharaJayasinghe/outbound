@@ -222,7 +222,64 @@ static func palm(rng: RandomNumberGenerator, bark: Material, fronds: Material) -
 	var mesh := ArrayMesh.new()
 	trunk.commit(mesh, bark)
 	leaves.commit(mesh, fronds)
+	mesh.set_meta(&"crown", top)  # Top of the trunk, where coconuts hang (coconut_cluster)
 	return mesh
+
+
+const CROWN_SWAY = 0.5  # The palm trunk's sway weight at the top (palm's `sway` curve)
+
+## A bunch of 3-6 coconuts hanging just under a palm's crown (`crown` from the palm
+## mesh's meta). Drawn with the palm's transform, and swaying as the top of the trunk
+## (UV2.x = CROWN_SWAY), so they move with the tree.
+static func coconut_cluster(rng: RandomNumberGenerator, crown: Vector3, material: Material) -> ArrayMesh:
+	var b := Builder.new()
+	var count := rng.randi_range(3, 6)
+	for k in count:
+		var az := TAU * k / count + rng.randf_range(-0.3, 0.3)
+		var at := crown + Vector3(cos(az) * 0.3, -0.42 - rng.randf_range(0.0, 0.2), sin(az) * 0.3)
+		_coconut(b, rng, at, CROWN_SWAY, 1.25)
+	var mesh := ArrayMesh.new()
+	b.commit(mesh, material)
+	return mesh
+
+
+## One coconut lying on its side on the ground (no sway), resting on y = 0
+static func fallen_coconut(rng: RandomNumberGenerator, material: Material) -> ArrayMesh:
+	var b := Builder.new()
+	# Its widest radius (with the lump) is about 0.11 * 1.15 * 1.06 m, so the centre sits that high
+	_coconut(b, rng, Vector3(0.0, 0.135, 0.0), 0.0, 1.15, true)
+	var mesh := ArrayMesh.new()
+	b.commit(mesh, material)
+	return mesh
+
+
+## A slightly lumpy, egg-shaped coconut (about 25 cm long) centred on `at`
+## (`lying`: long axis horizontal, for one on the ground; otherwise hanging, roughly upright)
+static func _coconut(b: Builder, rng: RandomNumberGenerator, at: Vector3, sway: float, scale := 1.0, lying := false) -> void:
+	const RINGS = 5
+	const SIDES = 8
+	var size := rng.randf_range(0.9, 1.1) * scale
+	var axis := Vector3(rng.randf_range(-0.4, 0.4), 1.0, rng.randf_range(-0.4, 0.4)).normalized()
+	if lying:
+		axis = Vector3(1.0, 0.0, rng.randf_range(-0.3, 0.3)).normalized()
+	var u := axis.cross(Vector3.UP if absf(axis.y) < 0.9 else Vector3.RIGHT).normalized()
+	var v := axis.cross(u)
+	var first := b.verts.size()
+	for r in RINGS + 1:
+		var lat := PI * r / RINGS - PI * 0.5
+		for k in SIDES:
+			var lon := TAU * k / SIDES
+			var n := (u * cos(lon) * cos(lat) + v * sin(lon) * cos(lat) + axis * sin(lat)).normalized()
+			# Egg-shaped: a little longer along the axis, with a slight three-sided lump
+			var radius := 0.11 * size * (1.0 + 0.06 * cos(lon * 3.0))
+			var p := at + (u * cos(lon) * cos(lat) + v * sin(lon) * cos(lat)) * radius + axis * sin(lat) * radius * 1.2
+			b.add(p, n, Vector2(float(k) / SIDES, float(r) / RINGS * 0.3), Vector2(sway, 0.0), Color.WHITE)
+	for r in RINGS:
+		for k in SIDES:
+			var a := first + r * SIDES + k
+			var c := first + r * SIDES + (k + 1) % SIDES
+			b.tri(a, a + SIDES, c)
+			b.tri(c, a + SIDES, c + SIDES)
 
 
 ## Broadleaf rainforest tree: trunk, a few branches and leaf-card canopy clusters.

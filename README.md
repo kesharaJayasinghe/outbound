@@ -26,7 +26,8 @@ island with eroded mountains, beaches, jungle, wildlife ambience and a swimmable
   deep sea to the west-south-west, with a few palms and grassy dunes. Its beach looks
   straight at the waterfall.
 - **Vegetation**: coconut palms on the shore, rainforest trees, big-leaf undergrowth, scattered
-  rocks and a dense GPU grass field around the player. It all sways in shared wind, and every
+  rocks and a dense GPU grass field around the player. Many of the beach palms carry bunches of
+  green coconuts, with ripe brown ones lying in the sand underneath. It all sways in shared wind, and every
   mesh and leaf texture is generated in code.
 - **Seabirds**: flocks of gulls circle over the coasts, the cliffs by the waterfall and the
   islet, gliding and banking with bursts of flapping, and calling now and then. More gulls

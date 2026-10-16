@@ -17,6 +17,8 @@ const GRASS_CHUNK_CELLS = 34   # Clumps per grass chunk side
 const SPAWN_CLEARANCE = 4.0    # Keep trees and boulders off the player's spawn point
 const ISLET_PALMS = 0.12       # Palm chance per tree spot in an islet's palm clumps
 const ISLET_BUSHES = 0.25      # Bush density on islets, relative to the main island
+const COCONUT_CHANCE = 0.55    # Palms on the sand that carry a bunch of coconuts
+const FALLEN_CHANCE = 0.4      # ...and that have a coconut or two lying underneath
 
 var gen: Node3D
 var rng := RandomNumberGenerator.new()
@@ -172,6 +174,14 @@ func _scatter_trees() -> void:
 	for i in 4:
 		palms.append(ProcMesh.palm(rng, palm_bark, frond_mat))
 		jungle.append(ProcMesh.broadleaf(rng, jungle_bark, canopy_mat))
+	# Coconuts use their own random numbers, so adding them doesn't move any trees
+	var coco_rng := RandomNumberGenerator.new()
+	coco_rng.seed = gen.terrain_seed + 3301
+	var green_husk := _bark_material(Color(0.32, 0.38, 0.1), Color(0.6, 0.6, 0.2), 0.0)
+	var clusters: Array[Mesh] = []
+	for palm in palms:
+		clusters.append(ProcMesh.coconut_cluster(coco_rng, palm.get_meta(&"crown"), green_husk))
+	var fallen := ProcMesh.fallen_coconut(coco_rng, green_husk)
 
 	if gen.tree_density <= 0.0:
 		return
@@ -201,7 +211,17 @@ func _scatter_trees() -> void:
 		var rot := Basis(Vector3.UP, rng.randf() * TAU)
 		if r < palm_p:
 			var s := rng.randf_range(0.8, 1.15)
-			_add(palms[rng.randi() % palms.size()], Transform3D(rot.scaled(Vector3.ONE * s), Vector3(x, h - 0.15, z)))
+			var kind := rng.randi() % palms.size()
+			var xform := Transform3D(rot.scaled(Vector3.ONE * s), Vector3(x, h - 0.15, z))
+			_add(palms[kind], xform)
+			# Coconuts on palms that stand on the beach sand
+			if above < gen.beach_height + 0.3 and coco_rng.randf() < COCONUT_CHANCE:
+				_add(clusters[kind], xform, 180.0)
+				if coco_rng.randf() < FALLEN_CHANCE:
+					for n in coco_rng.randi_range(1, 2):
+						var at := Vector3(x, 0.0, z) + Vector3.FORWARD.rotated(Vector3.UP, coco_rng.randf() * TAU) * coco_rng.randf_range(0.7, 2.2)
+						at.y = gen.get_height(at.x, at.z) - 0.01  # Just settled into the sand
+						_add(fallen, Transform3D(Basis(Vector3.UP, coco_rng.randf() * TAU), at), 90.0)
 			var col := CylinderShape3D.new()
 			col.radius = 0.25 * s
 			col.height = 3.0
