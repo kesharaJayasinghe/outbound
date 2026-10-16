@@ -15,6 +15,7 @@ const RECIPES = preload("res://scripts/build/recipes.gd")
 
 const SLOTS = 6
 const EQUIPPABLE: Array[StringName] = [&"stone"]
+const THROWABLE: Array[StringName] = [&"stone"]  # Shows the aiming dot while held
 const SHOW_TIME = 2.5          # Seconds the bar stays up after a change
 const FADE_TIME = 0.6
 const THROW_SPEED = 20.0       # Metres per second
@@ -45,6 +46,8 @@ var bar: HBoxContainer
 var bar_alpha := 0.0
 var bar_timer := 0.0
 var reminder: Label
+var dot: Control               # Aiming dot at the centre of the view (where throws go)
+var dot_on_target := false     # A coconut bunch is lined up: drawn with a ring
 
 
 func setup(generator: Node3D, player_node: CharacterBody3D, builder_node: Node, pickups_node: Node,
@@ -206,6 +209,7 @@ func _process(delta: float) -> void:
 	bar.visible = bar_alpha > 0.0
 	var holding := _holding()
 	reminder.visible = holding != &"" and bar_alpha < 0.5
+	_update_dot(holding)
 	if holding != &"":
 		reminder.text = "%d  %s  %d" % [selected + 1, RECIPES.RESOURCE_NAMES.get(holding, String(holding)), inventory.count(holding)]
 
@@ -242,6 +246,38 @@ func _build_hud() -> void:
 	reminder.add_theme_font_size_override("font_size", 14)
 	reminder.visible = false
 	builder.hud.add_child(reminder)
+
+	dot = Control.new()
+	dot.name = "AimDot"
+	dot.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dot.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	dot.visible = false
+	dot.draw.connect(_draw_dot)
+	builder.hud.add_child(dot)
+
+
+## The dot shows only while holding something throwable and free to throw it
+func _update_dot(holding: StringName) -> void:
+	var show_dot: bool = THROWABLE.has(holding) and not player.is_busy() and builder.mode == BUILDER.Mode.IDLE \
+			and Input.get_mouse_mode() == Input.MOUSE_MODE_CAPTURED and not get_tree().paused
+	dot.visible = show_dot
+	if not show_dot:
+		return
+	var on_target := false
+	if pickups:
+		var cam: Camera3D = player.camera
+		on_target = pickups.bunch_on_line(cam.global_position, -cam.global_basis.z, THROW_RANGE, AIM_ASSIST) != Vector3.INF
+	if on_target != dot_on_target:
+		dot_on_target = on_target
+		dot.queue_redraw()
+
+
+func _draw_dot() -> void:
+	var centre := dot.size * 0.5
+	dot.draw_circle(centre, 3.5, Color(0, 0, 0, 0.45))   # Dark edge, so it shows on sand and sky
+	dot.draw_circle(centre, 2.2, Color(1, 1, 1, 0.9))
+	if dot_on_target:
+		dot.draw_arc(centre, 9.0, 0.0, TAU, 32, Color(1.0, 0.85, 0.35, 0.9), 1.5, true)
 
 
 func _refresh_bar() -> void:

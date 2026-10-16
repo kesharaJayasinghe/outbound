@@ -135,7 +135,8 @@ particles, and the river-rush loop pitched down as the roar).
   stone: a RigidBody aimed at the camera ray hit (or a bunch on the line), with an arc
   compensating for gravity. In flight it calls `pickups.knock`, and on its first contact it
   calls `beach_birds.spook`. The bar fades after `SHOW_TIME`; a corner reminder stays while
-  something is held.
+  something is held. An aiming dot sits at the view centre (where throws go) while a THROWABLE
+  item is held, ringed when `bunch_on_line` finds a bunch.
 - `vegetation.gd`: jittered-grid scattering into MultiMeshes chunked every `CHUNK_SIZE` m (a
   fixed size, so culling doesn't degrade on a bigger world), plus one shared
   `StaticBody3D` with shape owners for collision. Grass is a camera-following GPU field:
