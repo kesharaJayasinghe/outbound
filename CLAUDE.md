@@ -119,7 +119,9 @@ particles, and the river-rush loop pitched down as the roar).
   the tree layout. Keep it that way for future additions to the scatter passes.
 - `pickups.gd`: things the player can pick up, for now the fallen coconuts (vegetation hands
   over `fallen_coconuts` and the mesh, so they're out of its chunked batches). One MultiMesh;
-  picking hides an instance (zero scale) and adds to `player.inventory`. It grows back after
+  E calls `player.pick_up`, which walks to a spot set by `PICK_REACH`, plays the pick clip and
+  calls back: on the grab the instance is hidden (zero scale) and the player draws the item on
+  a `RightHand` BoneAttachment3D; when it's put away it goes into `player.inventory`. It grows back after
   `REGROW_TIME` when the player is out of sight range. The prompt and toast use the builder's
   HUD. The builder's menu has an Inventory page.
 - `vegetation.gd`: jittered-grid scattering into MultiMeshes chunked every `CHUNK_SIZE` m (a
@@ -151,9 +153,12 @@ particles, and the river-rush loop pitched down as the roar).
   (`characters/human/swim_animations.res`: tread, crawl) blended by speed, each sought to a
   phase the controller advances so splashes land on hand entry. Sitting (C) plays
   `sit_animations.res`: `down` (sought forwards, then backwards to stand up) and a seated
-  `idle` loop. All are authored in `player-swim.blend` (outside the repo; `swim_clips.py` and
-  `sit_clips.py` text blocks) and converted with `tools/convert_anims.gd`, which maps the root
-  bone between the glb and FBX skeletons and checks the result against Idle.
+  `idle` loop. Picking up plays `pick_animations.res` (`up`; the right hand reaches `GRAB` in
+  `pick_clips.py`, which must match `PICK_REACH`). All are authored in `player-swim.blend`
+  (outside the repo) by the text blocks versioned in `tools/blender/`, and converted with
+  `tools/convert_anims.gd`, which maps the root bone between the glb and FBX skeletons and
+  checks the result against Idle. The `player-animation` skill has the full
+  workflow for adding or fixing clips.
 
 ## Conventions and gotchas
 

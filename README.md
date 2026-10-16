@@ -28,7 +28,7 @@ island with eroded mountains, beaches, jungle, wildlife ambience and a swimmable
 - **Vegetation**: coconut palms on the shore, rainforest trees, big-leaf undergrowth, scattered
   rocks and a dense GPU grass field around the player. Many of the beach palms carry bunches of
   green coconuts, with more lying in the sand underneath. Walk up to a fallen coconut and press
-  E to pick it up; it grows back after a while. It all sways in shared wind, and every
+  E: the player steps over, bends down and picks it up; it grows back after a while. It all sways in shared wind, and every
   mesh and leaf texture is generated in code.
 - **Seabirds**: flocks of gulls circle over the coasts, the cliffs by the waterfall and the
   islet, gliding and banking with bursts of flapping, and calling now and then. More gulls

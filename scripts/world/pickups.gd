@@ -2,7 +2,8 @@ extends Node3D
 
 ## Things lying about that the player can pick up: for now, the coconuts fallen under the
 ## beach palms (placed by vegetation.gd). Walk up to one and a prompt appears
-## ("E  Pick up coconut"); picking it up adds it to the player's inventory. A picked
+## ("E  Pick up coconut"); the player then bends down and picks it up (player.pick_up),
+## adding it to the inventory. A picked
 ## coconut grows back after REGROW_TIME, but only while the player is well away, so they
 ## never see one appear. All the coconuts are one MultiMesh; a picked one is hidden by
 ## giving it a zero scale.
@@ -75,7 +76,7 @@ func _process(delta: float) -> void:
 		if d < best and absf(p.y - at.y) < 1.5:
 			best = d
 			nearest = k
-	var offer: bool = nearest >= 0 and builder.mode == BUILDER.Mode.IDLE
+	var offer: bool = nearest >= 0 and builder.mode == BUILDER.Mode.IDLE and not player.is_busy()
 	prompt.visible = offer
 	if offer:
 		prompt.text = "E  Pick up %s" % items[nearest].name
@@ -83,18 +84,23 @@ func _process(delta: float) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed(&"interact") and nearest >= 0 and builder.mode == BUILDER.Mode.IDLE:
-		_pick(nearest)
+		if player.pick_up(items[nearest].xform, multimesh.mesh, _lift.bind(nearest), _collect.bind(nearest)):
+			nearest = -1
 		get_viewport().set_input_as_handled()
 
 
-func _pick(k: int) -> void:
+## The player's hand has it: take it off the ground (the player draws it in hand now)
+func _lift(k: int) -> void:
 	var item: Dictionary = items[k]
 	item.picked_at = clock
 	multimesh.set_instance_transform(k, Transform3D(Basis.from_scale(Vector3.ZERO), (item.xform as Transform3D).origin))
+
+
+func _collect(k: int) -> void:
+	var item: Dictionary = items[k]
 	var inventory = player.inventory
 	inventory.add(item.id, 1)
 	builder._toast("+1 %s  (%d)" % [String(item.name).capitalize(), inventory.count(item.id)])
-	nearest = -1
 
 
 func _regrow() -> void:

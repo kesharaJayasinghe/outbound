@@ -2,10 +2,10 @@ extends SceneTree
 
 ## Converts the hand-keyed clips exported from Blender into AnimationLibraries for human.fbx.
 ##
-## The clips are authored in player-swim.blend (keyed by its `swim_clips.py` and `sit_clips.py`
-## text blocks) on a Blender import of human.fbx, and exported as a glb with one NLA track per
-## clip: those in CLIPS, plus `check_idle` (the FBX's own Idle, used to verify this
-## conversion). Godot reads the same bone frames from both files; only the root (Hips) bone's
+## The clips are authored in player-swim.blend (keyed by its `swim_clips.py`, `sit_clips.py`
+## and `pick_clips.py` text blocks) on a Blender import of human.fbx, and exported as a glb
+## with one NLA track per clip: those in CLIPS, plus `check_idle` (the FBX's own Idle, used
+## to verify this conversion). Godot reads the same bone frames from both files; only the root (Hips) bone's
 ## tracks differ, being relative to differently oriented and scaled parent nodes, so they're
 ## mapped across. Only rotations (plus the Hips position) are kept.
 ##
@@ -19,6 +19,7 @@ const CLIPS = {
 	"swim_crawl": ["swim", "crawl", true],
 	"sit_down": ["sit", "down", false],  # Played backwards to stand up
 	"sit_idle": ["sit", "idle", true],
+	"pick_up": ["pick", "up", false],
 }
 const ROOT_BONE = "Hips"
 

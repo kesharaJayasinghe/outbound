@@ -4,7 +4,8 @@ extends CharacterBody3D
 ## orbit camera, movement relative to the camera, the character turning to face where
 ## it moves, and walk / jog / sprint animations blended by speed. V toggles first person.
 ## In deep water the character swims: treading water when still, front crawl when moving.
-## C sits down on the ground (and gets up again, as does moving or jumping).
+## C sits down on the ground (and gets up again, as does moving or jumping). Picking
+## something up (pick_up, from pickups.gd) walks to it, bends down and takes it in hand.
 
 const INVENTORY = preload("res://scripts/build/inventory.gd")
 
@@ -37,6 +38,9 @@ const ANIM_CRAWL = "swim/crawl"
 const SIT_ANIMS = preload("res://characters/human/sit_animations.res")
 const ANIM_SIT_DOWN = "sit/down"
 const ANIM_SIT_IDLE = "sit/idle"
+## Bending down to take something off the ground with the right hand
+const PICK_ANIMS = preload("res://characters/human/pick_animations.res")
+const ANIM_PICK = "pick/up"
 
 # Footsteps: each set lists its left-foot sounds first, then the same number of right-foot sounds
 const SOFT_STEPS = [
@@ -86,6 +90,13 @@ const SIT_CAMERA_HEIGHT = 0.95
 const SIT_EYE_BACK = 0.5
 const SIT_EYE_HEIGHT = 0.85
 
+# Picking up: where the right hand grabs, from the feet (metres to the right, forward; GRAB in
+# pick_clips.py), and when in the clip (fraction) it closes on the item and puts it away
+const PICK_REACH = Vector2(0.15, 0.5)
+const PICK_GRAB = 0.42
+const PICK_STOW = 0.85
+const PICK_APPROACH_TIME = 3.0  # Give up walking to the spot (blocked?) and pick from where you are
+
 const FOOT_SPACING = 0.11      # Sideways distance from the body's centre to each footprint
 
 const MIN_SPLASH_DEPTH = 0.03  # Water this shallow (metres) still sounds like wet sand
@@ -115,6 +126,18 @@ var sit := Sit.NONE
 var sit_time := 0.0     # Position in the sit-down clip (seconds); runs backwards when standing up
 var sit_idle_time := 0.0
 var sit_blend := 0.0    # 0 = standing, 1 = seated, following the clip (moves the camera)
+enum Pick { NONE, APPROACH, PICKING }
+var pick := Pick.NONE
+var pick_time := 0.0          # Seconds into the approach, then into the clip
+var pick_item: Transform3D    # Where the item lies
+var pick_mesh: Mesh
+var pick_stand := Vector3.ZERO  # Where to stand so the right hand lands on it
+var pick_dir := Vector3.ZERO    # Facing while picking (pick_stand is worked out for it)
+var pick_face := Vector3.ZERO   # Direction to face: where you're walking, then pick_dir
+var pick_on_grab: Callable    # Called as the hand closes on it (the item leaves the ground)
+var pick_on_done: Callable    # Called as it's put away
+var held: MeshInstance3D      # The item while it's in the hand
+var hand: BoneAttachment3D
 var footprints: Node3D
 var inventory = INVENTORY.new()  ## Resources carried, spent on crafting (builder.gd)
 
@@ -143,6 +166,9 @@ func _ready() -> void:
 		feet.append(foot)
 	_apply_view_mode()
 	camera_rig.global_position = global_position + Vector3.UP * CAMERA_HEIGHT
+	hand = BoneAttachment3D.new()
+	hand.bone_name = "RightHand"
+	model.find_child("Skeleton3D", true, false).add_child(hand)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -181,11 +207,15 @@ func _physics_process(delta: float) -> void:
 		_swim(delta, direction, input)
 	elif sit != Sit.NONE:
 		_sitting(delta, input)
+	elif pick != Pick.NONE:
+		_picking(delta, input)
 	else:
 		_walk(delta, direction, input)
 
 	# Face the direction of travel (or the camera direction in first person)
 	var face_dir := forward if first_person else direction
+	if pick != Pick.NONE:
+		face_dir = pick_face
 	if face_dir.length_squared() > 0.001 and sit == Sit.NONE:
 		var target_yaw := atan2(-face_dir.x, -face_dir.z)
 		model.rotation.y = lerp_angle(model.rotation.y, target_yaw, 1.0 - exp(-TURN_SPEED * delta))
@@ -249,6 +279,8 @@ func _process(delta: float) -> void:
 		_update_swim_strokes(delta)
 	if sit != Sit.NONE:
 		_update_sit_animation(delta)
+	if pick == Pick.PICKING:
+		_update_pick_animation(delta)
 
 
 func _apply_view_mode() -> void:
@@ -301,6 +333,7 @@ func _update_swim_state() -> void:
 		swim_time = 0.0
 		sit = Sit.NONE
 		sit_blend = 0.0
+		_end_pick()
 		if velocity.y < -2.5:
 			_play_splash(1.0, 1.0, true)  # Fell or jumped in
 		velocity.y *= 0.3
@@ -382,7 +415,8 @@ func _sit_down() -> void:
 	var depth := 0.0
 	if world and world.has_method("water_depth_at"):
 		depth = world.water_depth_at(global_position)
-	if swimming or not is_on_floor() or get_floor_normal().y < SIT_MIN_FLOOR_Y or depth > SIT_MAX_DEPTH:
+	if swimming or pick != Pick.NONE or not is_on_floor() or get_floor_normal().y < SIT_MIN_FLOOR_Y \
+			or depth > SIT_MAX_DEPTH:
 		return
 	sit = Sit.SITTING_DOWN
 	sit_time = 0.0
@@ -435,6 +469,93 @@ func _update_sit_animation(delta: float) -> void:
 	anim_tree.set("parameters/sit/blend_amount", idle_weight)
 	anim_tree.set("parameters/sit_down_seek/seek_request", sit_time)
 	anim_tree.set("parameters/sit_idle_seek/seek_request", sit_idle_time)
+
+
+# --- Picking things up ---------------------------------------------------------
+
+## True while sitting, swimming, in the air or already picking something up.
+func is_busy() -> bool:
+	return swimming or sit != Sit.NONE or pick != Pick.NONE or not is_on_floor()
+
+
+## Walks over to the item lying at `item`, bends down and picks it up, drawing `mesh` in the
+## right hand from the grab. Calls `on_grab` when it leaves the ground and `on_done` when
+## it's put away. Returns false (doing nothing) if the player is busy. Moving cancels the
+## walk over, but not the pick itself.
+func pick_up(item: Transform3D, mesh: Mesh, on_grab: Callable, on_done: Callable) -> bool:
+	if is_busy():
+		return false
+	pick = Pick.APPROACH
+	pick_time = 0.0
+	pick_item = item
+	pick_mesh = mesh
+	pick_on_grab = on_grab
+	pick_on_done = on_done
+	var to := Vector3(item.origin.x - global_position.x, 0.0, item.origin.z - global_position.z)
+	pick_dir = to.normalized() if to.length() > 0.05 else model.global_basis.z * -1.0
+	pick_face = pick_dir
+	var right := Vector3(-pick_dir.z, 0.0, pick_dir.x)
+	pick_stand = item.origin - pick_dir * PICK_REACH.y - right * PICK_REACH.x
+	return true
+
+
+func _picking(delta: float, input: Vector2) -> void:
+	var to := Vector3(pick_stand.x - global_position.x, 0.0, pick_stand.z - global_position.z)
+	if pick == Pick.APPROACH:
+		pick_time += delta
+		if input.length() > 0.3:
+			pick = Pick.NONE  # Walked off instead
+			return
+		if to.length() > 0.08 and pick_time < PICK_APPROACH_TIME:
+			# Walk over, slowing for the last step; face where you're going until there
+			if to.length() > 0.4:
+				pick_face = to.normalized()
+			_walk(delta, to.normalized(), Vector2(0.0, clampf(to.length() * 0.8, 0.12, 0.36)))
+			return
+		pick = Pick.PICKING
+		pick_time = 0.0
+		pick_face = pick_dir
+		anim_tree.set("parameters/state/transition_request", "pick")
+	# Picking: stay put, easing onto the exact spot
+	var nudge := to * 6.0
+	velocity.x = nudge.x if nudge.length() < 1.0 else nudge.normalized().x
+	velocity.z = nudge.z if nudge.length() < 1.0 else nudge.normalized().z
+	velocity.y = 0.0 if is_on_floor() else velocity.y - gravity * delta
+	move_and_slide()
+
+
+func _update_pick_animation(delta: float) -> void:
+	var length := PICK_ANIMS.get_animation("up").length
+	var before := pick_time / length
+	pick_time += delta
+	var now := pick_time / length
+	if before < PICK_GRAB and now >= PICK_GRAB:
+		# The item leaves the ground in the hand, exactly where it lay
+		held = MeshInstance3D.new()
+		held.mesh = pick_mesh
+		add_child(held)
+		held.global_transform = pick_item
+		held.reparent(hand, true)
+		pick_on_grab.call()
+	if before < PICK_STOW and now >= PICK_STOW:
+		_stow()
+	anim_tree.set("parameters/pick_seek/seek_request", minf(pick_time, length))
+	if now >= 1.0:
+		pick = Pick.NONE
+		anim_tree.set("parameters/state/transition_request", "ground")
+
+
+func _stow() -> void:
+	if held:
+		held.queue_free()
+		held = null
+		pick_on_done.call()
+
+
+## Cuts a pick short (fell into deep water): anything already in hand still counts.
+func _end_pick() -> void:
+	_stow()
+	pick = Pick.NONE
 
 
 # --- Footsteps -----------------------------------------------------------------
@@ -542,10 +663,12 @@ func _floor_collider() -> Object:
 ##   jump clip (seekable) ------------------------------------------------> ground/air/swim transition
 ##   tread / crawl clips (each sought to its phase), blended by speed --/
 ##   sit-down clip (sought, also backwards) / seated idle loop, blended -/
+##   pick-up clip (sought) ----------------------------------------------/
 func _build_animation_tree() -> AnimationTree:
 	var player: AnimationPlayer = model.find_child("AnimationPlayer", true, false)
 	player.add_animation_library("swim", SWIM_ANIMS)
 	player.add_animation_library("sit", SIT_ANIMS)
+	player.add_animation_library("pick", PICK_ANIMS)
 	for anim_name in [ANIM_IDLE, ANIM_WALK, ANIM_RUN]:
 		player.get_animation(anim_name).loop_mode = Animation.LOOP_LINEAR
 	_flatten_jump_hips(player.get_animation(ANIM_JUMP))
@@ -562,6 +685,7 @@ func _build_animation_tree() -> AnimationTree:
 	state.add_input("air")
 	state.add_input("swim")
 	state.add_input("sit")
+	state.add_input("pick")
 	state.xfade_time = 0.15
 
 	var graph := AnimationNodeBlendTree.new()
@@ -579,6 +703,8 @@ func _build_animation_tree() -> AnimationTree:
 	graph.add_node("sit_idle", _clip(ANIM_SIT_IDLE))
 	graph.add_node("sit_idle_seek", AnimationNodeTimeSeek.new())
 	graph.add_node("sit", AnimationNodeBlend2.new())
+	graph.add_node("pick", _clip(ANIM_PICK))
+	graph.add_node("pick_seek", AnimationNodeTimeSeek.new())
 	graph.add_node("state", state)
 	graph.connect_node("speed_scale", 0, "locomotion")
 	graph.connect_node("jump_seek", 0, "jump")
@@ -594,6 +720,8 @@ func _build_animation_tree() -> AnimationTree:
 	graph.connect_node("state", 1, "jump_seek")
 	graph.connect_node("state", 2, "swim")
 	graph.connect_node("state", 3, "sit")
+	graph.connect_node("pick_seek", 0, "pick")
+	graph.connect_node("state", 4, "pick_seek")
 	graph.connect_node("output", 0, "state")
 
 	var tree := AnimationTree.new()
