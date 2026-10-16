@@ -30,6 +30,8 @@ var spawn := Vector2.INF
 var buckets := {}              # [mesh, chunk] -> {mesh, xforms, vis_end}
 var body: StaticBody3D
 var grass_root: Node3D
+var fallen_coconuts: Array[Transform3D] = []  # Handed to pickups.gd, which draws them
+var fallen_coconut_mesh: Mesh
 
 
 func build(generator: Node3D) -> void:
@@ -182,6 +184,7 @@ func _scatter_trees() -> void:
 	for palm in palms:
 		clusters.append(ProcMesh.coconut_cluster(coco_rng, palm.get_meta(&"crown"), green_husk))
 	var fallen := ProcMesh.fallen_coconut(coco_rng, green_husk)
+	fallen_coconut_mesh = fallen
 
 	if gen.tree_density <= 0.0:
 		return
@@ -221,7 +224,7 @@ func _scatter_trees() -> void:
 					for n in coco_rng.randi_range(1, 2):
 						var at := Vector3(x, 0.0, z) + Vector3.FORWARD.rotated(Vector3.UP, coco_rng.randf() * TAU) * coco_rng.randf_range(0.7, 2.2)
 						at.y = gen.get_height(at.x, at.z) - 0.01  # Just settled into the sand
-						_add(fallen, Transform3D(Basis(Vector3.UP, coco_rng.randf() * TAU), at), 90.0)
+						fallen_coconuts.append(Transform3D(Basis(Vector3.UP, coco_rng.randf() * TAU), at))
 			var col := CylinderShape3D.new()
 			col.radius = 0.25 * s
 			col.height = 3.0

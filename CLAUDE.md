@@ -117,6 +117,11 @@ particles, and the river-rush loop pitched down as the roar).
   transform and `CROWN_SWAY` as its sway weight, so it moves exactly with the top of the trunk
   in the bark shader's wind. Coconut placement uses its own RNG (`coco_rng`), so it never shifts
   the tree layout. Keep it that way for future additions to the scatter passes.
+- `pickups.gd`: things the player can pick up, for now the fallen coconuts (vegetation hands
+  over `fallen_coconuts` and the mesh, so they're out of its chunked batches). One MultiMesh;
+  picking hides an instance (zero scale) and adds to `player.inventory`. It grows back after
+  `REGROW_TIME` when the player is out of sight range. The prompt and toast use the builder's
+  HUD. The builder's menu has an Inventory page.
 - `vegetation.gd`: jittered-grid scattering into MultiMeshes chunked every `CHUNK_SIZE` m (a
   fixed size, so culling doesn't degrade on a bigger world), plus one shared
   `StaticBody3D` with shape owners for collision. Grass is a camera-following GPU field:
@@ -160,6 +165,9 @@ particles, and the river-rush loop pitched down as the roar).
   the build) or locals after Node3D properties (`basis`, `position`) or global functions
   (`seed`, `len`). When renaming a shadowing local, update every use; a leftover silently
   reads the node's property instead.
+- **Visibility range on a MultiMesh** is measured to the middle of the whole MultiMesh, not to each
+  instance. Only use it on spatially chunked batches (vegetation's `CHUNK_SIZE` chunks). On one
+  MultiMesh spread over the world, such as the birds or pickups, it hides everything.
 - **Keep terrain sampling consistent**: CPU `_sample`, the grass shader's `terrain_height` and
   the mesh all split each cell along the same diagonal. Change all three together.
 - **Import settings are part of the source**. Edit the `.import` file, then re-import:

@@ -1,7 +1,7 @@
 extends Node
 
 ## The interaction menu (M, like GTA Online's), crafting and placing structures.
-## Nothing is on screen until the menu is opened. It lists Map and Craft, plus context actions
+## Nothing is on screen until the menu is opened. It lists Map, Inventory and Craft, plus context actions
 ## such as taking down the structure the player faces (highlighted only while that row
 ## is selected). Picking a recipe the player can afford shows a see-through preview in
 ## front of them, green where it fits and red where it doesn't (too uneven, in water, or
@@ -408,6 +408,8 @@ func _open_menu(page: StringName, index := 0) -> void:
 			menu_title.text = "Interaction"
 			menu_items.append({"label": "Map", "detail": "See the island and where you are.",
 					"action": _open_map})
+			menu_items.append({"label": "Inventory", "submenu": true,
+					"detail": "What you're carrying.", "action": _open_menu.bind(&"inventory")})
 			menu_items.append({"label": "Craft", "submenu": true,
 					"detail": "Make something from the resources you carry.",
 					"action": _open_menu.bind(&"craft")})
@@ -418,6 +420,15 @@ func _open_menu(page: StringName, index := 0) -> void:
 						"detail": "Nothing to refund in free build." if inventory.free_build
 								else "Refunds " + RECIPES.describe_cost(r.get("cost", {})) + ".",
 						"action": _remove.bind(menu_target), "target": menu_target})
+		&"inventory":
+			menu_title.text = "Inventory"
+			for id in inventory.items:
+				if inventory.count(id) > 0:
+					menu_items.append({"label": "%s   %d" % [RECIPES.RESOURCE_NAMES.get(id, String(id)), inventory.count(id)],
+							"detail": "", "action": func() -> void: pass})
+			if menu_items.is_empty():
+				menu_items.append({"label": "Nothing yet", "enabled": false,
+						"detail": "Pick things up with E: try the coconuts under the beach palms.", "action": func() -> void: pass})
 		&"craft":
 			menu_title.text = "Craft"
 			for r: Dictionary in RECIPES.RECIPES:

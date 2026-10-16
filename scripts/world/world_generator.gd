@@ -16,6 +16,7 @@ const WATERFALL = preload("res://scripts/world/waterfall.gd")
 const CAVE = preload("res://scripts/world/cave.gd")
 const BIRDS = preload("res://scripts/world/birds.gd")
 const BEACH_BIRDS = preload("res://scripts/world/beach_birds.gd")
+const PICKUPS = preload("res://scripts/world/pickups.gd")
 const HIDDEN_SEABED_DEPTH = 24.0  # Seabed deeper than this (metres) is left out of the terrain mesh
 const WATERFALL_STEP = 3.0  # Water surface drop across one cell (metres) that counts as a waterfall
 const BUILDER = preload("res://scripts/build/builder.gd")
@@ -144,6 +145,11 @@ func _ready() -> void:
 		builder.name = "Builder"
 		add_child(builder)
 		builder.setup(self, player)
+		if vegetation:
+			var pickups := PICKUPS.new()
+			pickups.name = "Pickups"
+			add_child(pickups)
+			pickups.setup(self, player, vegetation, builder)
 
 
 ## Runs the procedural pipeline (no scene nodes are built). Used by _ready and by the

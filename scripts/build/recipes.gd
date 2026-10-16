@@ -7,6 +7,7 @@ const RESOURCE_NAMES := {
 	&"wood": "Wood",
 	&"palm_frond": "Palm fronds",
 	&"fibre": "Fibre",
+	&"coconut": "Coconuts",
 }
 
 const RECIPES := [

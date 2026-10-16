@@ -27,7 +27,8 @@ island with eroded mountains, beaches, jungle, wildlife ambience and a swimmable
   straight at the waterfall.
 - **Vegetation**: coconut palms on the shore, rainforest trees, big-leaf undergrowth, scattered
   rocks and a dense GPU grass field around the player. Many of the beach palms carry bunches of
-  green coconuts, with ripe brown ones lying in the sand underneath. It all sways in shared wind, and every
+  green coconuts, with more lying in the sand underneath. Walk up to a fallen coconut and press
+  E to pick it up; it grows back after a while. It all sways in shared wind, and every
   mesh and leaf texture is generated in code.
 - **Seabirds**: flocks of gulls circle over the coasts, the cliffs by the waterfall and the
   islet, gliding and banking with bursts of flapping, and calling now and then. More gulls
@@ -69,13 +70,14 @@ The island loads from the baked files in `world/`, so startup is quick.
 | Space | Jump |
 | V | Toggle first / third person |
 | C | Sit down on the ground / get up (moving or jumping also gets up) |
+| E | Pick up (when a prompt shows) |
 | M | Interaction menu: scroll (mouse wheel or two-finger trackpad) selects, click confirms, right-click goes back |
 | Click / Right-click | Build / back to the menu, while placing |
 | Scroll / R | Rotate the preview 15° / 90°, while placing |
 | Esc | Release the mouse (click to recapture) |
 
 Bindings live in **Project Settings → Input Map**. `interaction_menu` (M, or the
-touchpad on a PlayStation controller) and `rotate_build` (R) get
+touchpad on a PlayStation controller), `interact` (E) and `rotate_build` (R) get
 default keys in code if the Input Map doesn't define them.
 
 ## The island: bake, then edit
