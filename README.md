@@ -29,7 +29,9 @@ island with eroded mountains, beaches, jungle, wildlife ambience and a swimmable
   rocks and a dense GPU grass field around the player. It all sways in shared wind, and every
   mesh and leaf texture is generated in code.
 - **Seabirds**: flocks of gulls circle over the coasts, the cliffs by the waterfall and the
-  islet, gliding and banking with bursts of flapping, and calling now and then.
+  islet, gliding and banking with bursts of flapping, and calling now and then. More gulls
+  stand about on the beaches, walking and pecking at the sand. Get too close and they take
+  off with an alarm call, then land on another beach a little later.
 - **Third-person character**, with controls in the style of GTA V: an over-the-shoulder camera,
   walk, jog and sprint, jumping, and a first-person toggle.
 - **Swimming**: wade into the shallows, then swim in deep water. The character treads water when
@@ -115,7 +117,7 @@ These settings apply when generating or baking an island:
 | Lake and River | Toggle, lake radius and depth, river width and depth, waterfall toggle and bearing, grotto behind the waterfall |
 | Islet | Toggle, whole-world grid size, islet centre, islet area (fraction of the main island's) |
 | Vegetation | Toggles for vegetation and grass; tree, bush and rock density |
-| Wildlife | Toggle for the seabirds |
+| Wildlife | Toggle for the seabirds (flying and on the beaches) |
 | Audio | Toggle for the ambient soundscape |
 
 Colours, wind and other visual parameters are shader uniforms on the materials in `shaders/`.

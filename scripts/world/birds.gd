@@ -207,34 +207,63 @@ func _update(delta: float) -> void:
 
 ## A gull, about 1.5 m across the wings, facing -Z. Wings bend up at the elbow, and the
 ## tips sweep back (the gull "M"). UV2.x: 0 on the body, out to 1 at the wingtips.
+## Legs (UV2.y = 1) hang to y = -0.2; the shader hides them in flight.
 static func _bird_mesh() -> ArrayMesh:
 	var white := Color(0.95, 0.95, 0.93)
 	var grey := Color(0.7, 0.72, 0.75)
 	var black := Color(0.12, 0.12, 0.13)
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	# Wing triangles carry UV2.x (distance out along the wing); body ones leave it at 0
+	var wing_tri := func(a: Vector3, b: Vector3, c: Vector3, ca: Color, cb: Color, cc: Color) -> void:
+		var n := (c - a).cross(b - a).normalized()
+		for v in [[a, ca], [b, cb], [c, cc]]:
+			st.set_normal(n)
+			st.set_color(v[1])
+			st.set_uv2(Vector2(maxf(absf((v[0] as Vector3).x) / 0.75, 0.001), 0.0))
+			st.add_vertex(v[0])
 	var tri := func(a: Vector3, b: Vector3, c: Vector3, ca: Color, cb: Color, cc: Color) -> void:
 		var n := (c - a).cross(b - a).normalized()
 		for v in [[a, ca], [b, cb], [c, cc]]:
 			st.set_normal(n)
 			st.set_color(v[1])
-			st.set_uv2(Vector2(absf((v[0] as Vector3).x) / 0.75, 0.0))
+			st.set_uv2(Vector2.ZERO)
 			st.add_vertex(v[0])
 
-	# Body: a spindle from beak to tail, and a fanned tail
-	var nose := Vector3(0.0, 0.0, -0.32)
-	var tail := Vector3(0.0, 0.01, 0.3)
-	var top := Vector3(0.0, 0.055, -0.05)
-	var bottom := Vector3(0.0, -0.05, -0.05)
-	var left := Vector3(-0.06, 0.0, -0.05)
-	var right := Vector3(0.06, 0.0, -0.05)
-	for end in [nose, tail]:
-		for pair in [[top, right], [right, bottom], [bottom, left], [left, top]]:
-			if end == nose:
-				tri.call(end, pair[0], pair[1], white, white, white)
-			else:
-				tri.call(end, pair[1], pair[0], white, white, white)
-	tri.call(Vector3(0.0, 0.01, 0.2), Vector3(0.09, 0.01, 0.38), Vector3(-0.09, 0.01, 0.38), white, white, white)
+	# Body and head: rounded, made of rings around the body's long axis ([z, centre y,
+	# half-width, half-height]), closed at both ends; a yellow beak; a fanned tail
+	var beak := Color(0.95, 0.78, 0.25)
+	var rings := func(profile: Array, colour: Color) -> void:
+		const SIDES = 8
+		var loops := []
+		for r: Array in profile:
+			var loop := []
+			for k in SIDES:
+				var a := TAU * k / SIDES
+				loop.append(Vector3(cos(a) * r[2], r[1] + sin(a) * r[3], r[0]))
+			loops.append(loop)
+		for k in SIDES:
+			var j := (k + 1) % SIDES
+			var first: Array = loops[0]
+			var last: Array = loops[loops.size() - 1]
+			var front_point := Vector3(0.0, profile[0][1], profile[0][0] - 0.03)
+			var back_point := Vector3(0.0, profile[-1][1], profile[-1][0] + 0.04)
+			tri.call(front_point, first[j], first[k], colour, colour, colour)
+			tri.call(back_point, last[k], last[j], colour, colour, colour)
+			for l in loops.size() - 1:
+				var a: Array = loops[l]
+				var b: Array = loops[l + 1]
+				tri.call(a[k], a[j], b[j], colour, colour, colour)
+				tri.call(a[k], b[j], b[k], colour, colour, colour)
+	rings.call([[-0.17, 0.035, 0.05, 0.055], [-0.1, 0.02, 0.08, 0.08], [0.02, 0.015, 0.075, 0.07],
+			[0.14, 0.02, 0.05, 0.045], [0.24, 0.028, 0.025, 0.02]], white)
+	rings.call([[-0.27, 0.095, 0.028, 0.03], [-0.235, 0.1, 0.045, 0.045], [-0.2, 0.09, 0.04, 0.04]], white)
+	var tip := Vector3(0.0, 0.088, -0.36)
+	for k in 4:
+		var a := TAU * k / 4.0
+		var b := TAU * (k + 1) / 4.0
+		tri.call(tip, Vector3(cos(a) * 0.014, 0.093 + sin(a) * 0.012, -0.29), Vector3(cos(b) * 0.014, 0.093 + sin(b) * 0.012, -0.29), beak, beak, beak)
+	tri.call(Vector3(0.0, 0.03, 0.2), Vector3(0.09, 0.03, 0.38), Vector3(-0.09, 0.03, 0.38), white, white, white)
 
 	# Wings: inner panel to the raised elbow, outer panel to the swept-back tip
 	for side in [-1.0, 1.0]:
@@ -243,9 +272,26 @@ static func _bird_mesh() -> ArrayMesh:
 		var elbow_front := Vector3(0.38 * side, 0.07, -0.1)
 		var elbow_back := Vector3(0.36 * side, 0.07, 0.12)
 		var tip_front := Vector3(0.72 * side, 0.0, -0.01)
-		var tip := Vector3(0.75 * side, -0.01, 0.1)
-		tri.call(root_front, elbow_front, elbow_back, grey, grey, grey)
-		tri.call(root_front, elbow_back, root_back, grey, grey, grey)
-		tri.call(elbow_front, tip_front, tip, grey, black, black)
-		tri.call(elbow_front, tip, elbow_back, grey, black, grey)
+		var wing_tip := Vector3(0.75 * side, -0.01, 0.1)
+		wing_tri.call(root_front, elbow_front, elbow_back, grey, grey, grey)
+		wing_tri.call(root_front, elbow_back, root_back, grey, grey, grey)
+		wing_tri.call(elbow_front, tip_front, wing_tip, grey, black, black)
+		wing_tri.call(elbow_front, wing_tip, elbow_back, grey, black, grey)
+
+	# Legs: two thin crossed strips each, and a webbed foot
+	var leg := Color(0.9, 0.62, 0.42)
+	var leg_tri := func(a: Vector3, b: Vector3, c: Vector3) -> void:
+		var n := (c - a).cross(b - a).normalized()
+		for v: Vector3 in [a, b, c]:
+			st.set_normal(n)
+			st.set_color(leg)
+			st.set_uv2(Vector2(0.0, 1.0))
+			st.add_vertex(v)
+	for side in [-1.0, 1.0]:
+		var hip := Vector3(0.035 * side, -0.03, 0.02)
+		var foot := Vector3(0.035 * side, -0.2, 0.02)
+		for w: Vector3 in [Vector3(0.012, 0.0, 0.0), Vector3(0.0, 0.0, 0.012)]:
+			leg_tri.call(hip - w, hip + w, foot + w)
+			leg_tri.call(hip - w, foot + w, foot - w)
+		leg_tri.call(foot + Vector3(-0.03, 0.0, 0.01), foot + Vector3(0.0, 0.0, -0.06), foot + Vector3(0.03, 0.0, 0.01))
 	return st.commit()

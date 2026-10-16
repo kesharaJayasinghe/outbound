@@ -104,6 +104,14 @@ particles, and the river-rush loop pitched down as the roar).
   (AudioStreamPlayer3D on `Ambience`). A random member calls every few seconds and the voice
   follows it. A flock's `members` is a plain Array: a packed array inside a Dictionary is
   copied on access, so appending to it changes nothing.
+- `beach_birds.gd`: gulls in small groups on low, flat sand (farthest-point sampling of
+  beach vertices). A state machine runs stand / walk / peck, then on spooking (player within
+  `SPOOK_DISTANCE`, doubled when running) take-off, fly and land. Neighbours panic after a
+  short delay, and after fleeing a bird lands on a beach 50–200 m away, out of the player's
+  reach. Only birds within `SIMULATE_RANGE` of the player, or in the air, are updated. It shares
+  the gull mesh (`birds.gd` `_bird_mesh`, which has legs) and `bird.gdshader`, where
+  INSTANCE_CUSTOM.a folds the wings and drops the legs, and .b is the walking speed on the
+  ground. Only wing triangles carry UV2.x: anything with UV2.x > 0 flaps and folds.
 - `vegetation.gd`: jittered-grid scattering into MultiMeshes chunked every `CHUNK_SIZE` m (a
   fixed size, so culling doesn't degrade on a bigger world), plus one shared
   `StaticBody3D` with shape owners for collision. Grass is a camera-following GPU field:
