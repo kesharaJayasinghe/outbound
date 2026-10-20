@@ -110,8 +110,7 @@ func _place_groups() -> void:
 		chosen.append(best)
 	for c in chosen:
 		for k in rng.randi_range(PER_GROUP.x, PER_GROUP.y):
-			var at := c + Vector3(rng.randf_range(-1, 1), 0.0, rng.randf_range(-1, 1)) * GROUP_SPREAD
-			at.y = gen.get_height(at.x, at.z)
+			var at := _ground_spot(c)
 			birds.append({
 				"state": State.STAND, "timer": rng.randf_range(0.5, 4.0),
 				"pos": at, "home": c,
@@ -153,7 +152,11 @@ func _step(b: Dictionary, delta: float, from: Vector3) -> void:
 			b.perched = move_toward(b.perched, 1.0, delta * 2.5)
 			var next: Vector3 = b.pos + (b.heading as Vector3) * WALK_SPEED * delta
 			if not _walkable(next) or Vector2(next.x - b.home.x, next.z - b.home.z).length() > HOME_RANGE:
+				# Blocked (the waterline, or too far from home): turn round and stop for a
+				# moment. Turning again every frame would just spin it on the spot.
 				b.heading = (b.heading as Vector3).rotated(Vector3.UP, PI * rng.randf_range(0.6, 1.4))
+				b.state = State.STAND
+				b.timer = rng.randf_range(0.5, 1.5)
 			else:
 				next.y = gen.get_height(next.x, next.z)
 				b.pos = next
@@ -188,6 +191,17 @@ func _next_ground_action(b: Dictionary) -> void:
 		b.timer = rng.randf_range(1.0, 4.0)
 		if r > 0.9:
 			b.heading = (b.heading as Vector3).rotated(Vector3.UP, rng.randf_range(-2.0, 2.0))
+
+
+## A random spot within GROUP_SPREAD of a beach spot that the bird can walk from. The
+## beach spot itself is always walkable, so it's the fallback.
+func _ground_spot(centre: Vector3) -> Vector3:
+	for attempt in 12:
+		var at := centre + Vector3(rng.randf_range(-1, 1), 0.0, rng.randf_range(-1, 1)) * GROUP_SPREAD
+		if _walkable(at):
+			at.y = gen.get_height(at.x, at.z)
+			return at
+	return centre
 
 
 func _walkable(p: Vector3) -> bool:
@@ -250,8 +264,7 @@ func _fly(b: Dictionary, delta: float, from: Vector3) -> void:
 			var spot := spots[rng.randi() % spots.size()]
 			var hop := spot.distance_to(b.pos)
 			if spot.distance_to(from) > 60.0 and hop > LANDING_HOP.x and hop < LANDING_HOP.y:
-				var land := spot + Vector3(rng.randf_range(-1, 1), 0.0, rng.randf_range(-1, 1)) * GROUP_SPREAD
-				b.target = Vector3(land.x, gen.get_height(land.x, land.z), land.z)
+				b.target = _ground_spot(spot)
 				b.home = spot
 				break
 	var to_target: Vector3 = b.target - b.pos if b.target != Vector3.ZERO else Vector3.ZERO
