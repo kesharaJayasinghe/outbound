@@ -2,7 +2,7 @@ extends Node
 
 ## Ambient soundscape that follows the player around the island:
 ## - surf from the nearest stretch of shoreline (positional, so it has direction)
-## - distant, muffled sea that carries further the higher you climb
+## - distant, muffled sea: near the coast and from high up, fading out deep inland
 ## - birdsong in the forest, thinning out on open ground and high up
 ## - wind that picks up with altitude and on exposed ground
 ## - a babbling river from the nearest flowing stretch, and rushing water near rapids
@@ -161,7 +161,9 @@ func _process(delta: float) -> void:
 				rapid_target = _nearest(rapid_points, pos)
 		surf.global_position = surf.global_position.lerp(surf_target, 1.0 - exp(-2.0 * delta))
 		surf.volume_db = linear_to_db(startup) + 2.0
-		_fade(distant_sea, (0.25 + 0.6 * smoothstep(0.1, 0.6, altitude)) * 0.8, delta)
+		# Inland and low down the sea is out of earshot; from high up it carries again
+		var coast := 1.0 - smoothstep(40.0, 160.0, pos.distance_to(surf_target))
+		_fade(distant_sea, (0.06 + 0.19 * coast + 0.6 * smoothstep(0.25, 0.8, altitude)) * 0.8, delta)
 	else:
 		surf.volume_db = -80.0
 		_fade(distant_sea, 0.0, delta)

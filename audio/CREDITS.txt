@@ -3,7 +3,9 @@ Audio sources (all CC0 1.0 / public domain - no attribution required, credited a
 sea_shore.wav, sea_distant.wav
   "Sea and river wave sounds" by RandomMind
   https://opengameart.org/content/sea-and-river-wave-sounds
-  Trimmed, loudness-normalised and made into seamless loops (sea_distant is low-passed).
+  Trimmed, loudness-normalised and made into seamless loops. sea_distant is made from
+  sea_shore: high-passed at 110 Hz, gently low-passed (1.6 kHz), widened to stereo with a
+  17 ms delay on one side.
 
 birds.wav
   "Birds and Wind - Ambient" by Spring Spring
@@ -17,7 +19,8 @@ footsteps/soft_*.wav, footsteps/stone_*.wav
   Leading silence trimmed, converted to mono, loudness-normalised.
 
 wind.wav
-  Synthesised for this project with ffmpeg (filtered brown/pink noise with gust envelopes).
+  Synthesised for this project with ffmpeg: band-passed pink noise (220 Hz - 2.4 kHz, an
+  independent channel each side) over a little brown-noise body, with a slow gust envelope.
 
 footsteps/water_1-7.wav, footsteps/water_land_1-2.wav
   "40 CC0 water / splash / slime SFX" by rubberduck (splash_02/03/06/08/12/14/15, splash_04/07)
