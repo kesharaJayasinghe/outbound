@@ -176,7 +176,8 @@ particles, and the river-rush loop pitched down as the roar).
   (ground/air/swim transition), footsteps and splashes, swimming. `footprints.gd` holds a pooled,
   fading Decal trail that sand steps leave behind. `water_splash.gd` is the same idea for steps in
   shallow water: pooled one-shot droplet bursts (GPUParticles3D) plus foam rings
-  (`shaders/splash_ring.gdshader`, aged through an instance uniform), scaled by speed and depth. Swimming plays two hand-keyed clips
+  (`shaders/splash_ring.gdshader`, aged through an instance uniform), scaled by speed and depth. Swim strokes
+  splash at the entering hand (LeftHand/RightHand bone, alternating with `stroke_phase`). Swimming plays two hand-keyed clips
   (`characters/human/swim_animations.res`: tread, crawl) blended by speed, each sought to a
   phase the controller advances so splashes land on hand entry. Sitting (C) plays
   `sit_animations.res`: `down` (sought forwards, then backwards to stand up) and a seated

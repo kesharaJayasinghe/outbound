@@ -145,6 +145,7 @@ var pick_on_grab: Callable    # Called as the hand closes on it (the item leaves
 var pick_on_done: Callable    # Called as it's put away
 var held: MeshInstance3D      # The item while it's in the hand
 var hand: BoneAttachment3D
+var skeleton: Skeleton3D
 var throw_time := -1.0        # Seconds into the throw clip; -1 when not throwing
 var throw_dir := Vector3.ZERO
 var throw_on_release: Callable
@@ -182,7 +183,8 @@ func _ready() -> void:
 	camera_rig.global_position = global_position + Vector3.UP * CAMERA_HEIGHT
 	hand = BoneAttachment3D.new()
 	hand.bone_name = "RightHand"
-	model.find_child("Skeleton3D", true, false).add_child(hand)
+	skeleton = model.find_child("Skeleton3D", true, false)
+	skeleton.add_child(hand)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -395,7 +397,9 @@ func _update_swim_strokes(delta: float) -> void:
 	var before := floori(stroke_phase * 2.0)
 	stroke_phase += delta / crawl_length * lerpf(0.65, 1.0, swim_speed / SWIM_SPEED)
 	if floori(stroke_phase * 2.0) != before and crawl > 0.4 and swimming:
-		_play_stroke_splash(swim_speed / SWIM_SPRINT_SPEED)
+		# The left hand enters at the start of the cycle, the right halfway through
+		var left_hand := floori(stroke_phase * 2.0) % 2 == 0
+		_play_stroke_splash(swim_speed / SWIM_SPRINT_SPEED, left_hand)
 	stroke_phase = fposmod(stroke_phase, 1.0)
 	anim_tree.set("parameters/tread_seek/seek_request", tread_phase * tread_length)
 	anim_tree.set("parameters/crawl_seek/seek_request", stroke_phase * crawl_length)
@@ -416,7 +420,8 @@ func _update_swim_pose(delta: float) -> void:
 	model.position = middle - Basis.from_euler(Vector3(tilt, model.rotation.y, 0.0)) * Vector3(0.0, 0.9, 0.0)
 
 
-func _play_stroke_splash(intensity: float) -> void:
+func _play_stroke_splash(intensity: float, left_hand: bool) -> void:
+	_show_stroke_splash(intensity, left_hand)
 	var foot := feet[0 if left_foot else 1]
 	left_foot = not left_foot
 	var stream: AudioStream = WATER_STEPS.pick_random()
@@ -427,6 +432,20 @@ func _play_stroke_splash(intensity: float) -> void:
 	foot.pitch_scale = randf_range(1.05, 1.25)
 	foot.volume_db = linear_to_db(lerpf(0.3, 0.6, clampf(intensity, 0.0, 1.0)))
 	foot.play()
+
+
+## Spray and foam where the hand goes in: smaller than a running step, a little bigger
+## when sprinting
+func _show_stroke_splash(intensity: float, left_hand: bool) -> void:
+	var surface := _water_surface()
+	if surface == -INF or skeleton == null:
+		return
+	var bone := skeleton.find_bone("LeftHand" if left_hand else "RightHand")
+	if bone < 0:
+		return
+	var pos := skeleton.global_transform * skeleton.get_bone_global_pose(bone).origin
+	pos.y = surface
+	splashes.add(pos, velocity, lerpf(0.4, 0.75, clampf(intensity, 0.0, 1.0)))
 
 
 # --- Sitting -------------------------------------------------------------------
