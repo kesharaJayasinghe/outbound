@@ -149,6 +149,7 @@ var throw_time := -1.0        # Seconds into the throw clip; -1 when not throwin
 var throw_dir := Vector3.ZERO
 var throw_on_release: Callable
 var footprints: Node3D
+var splashes: Node3D
 var inventory = INVENTORY.new()  ## Resources carried, spent on crafting (builder.gd)
 
 @onready var model: Node3D = $Model
@@ -168,6 +169,9 @@ func _ready() -> void:
 	footprints.name = "Footprints"
 	add_child(footprints)
 	footprints.set_excluded_layers(1 << (CHARACTER_LAYER - 1))  # Don't print onto our own feet
+	splashes = preload("res://scripts/player/water_splash.gd").new()
+	splashes.name = "Splashes"
+	add_child(splashes)
 	for i in 2:
 		var foot := AudioStreamPlayer3D.new()
 		foot.bus = &"SFX"
@@ -685,11 +689,13 @@ func _leave_footprint(left: bool) -> void:
 
 
 ## Wading: splashes get louder and deeper-pitched as the water gets deeper. Jumping in,
-## or the first step into the water, makes a bigger splash.
+## or the first step into the water, makes a bigger splash. Each one also shows spray and
+## a foam ring at the stepping foot (water_splash.gd).
 func _play_splash(intensity: float, depth: float, big: bool) -> void:
 	if depth > MAX_WADE_DEPTH and not big:
 		return
 	var wade := clampf(depth / 0.8, 0.0, 1.0)
+	_show_splash(intensity, wade, big, left_foot)
 	var foot := feet[0 if left_foot else 1]
 	left_foot = not left_foot
 	var pool: Array = WATER_LANDINGS if big else WATER_STEPS
@@ -701,6 +707,23 @@ func _play_splash(intensity: float, depth: float, big: bool) -> void:
 	foot.pitch_scale = randf_range(0.94, 1.06) * lerpf(1.1, 0.85, wade)
 	foot.volume_db = linear_to_db(maxf(intensity, 0.5) * lerpf(0.6, 1.25, wade)) + (1.0 if big else 0.0)
 	foot.play()
+
+
+## Spray and a foam ring where the foot meets the water: more and higher the faster
+## you go, and bigger in deeper water or when jumping in
+func _show_splash(intensity: float, wade: float, big: bool, left: bool) -> void:
+	var surface := _water_surface()
+	if surface == -INF:
+		return
+	var pos := global_position
+	if not big:
+		var yaw := model.global_rotation.y
+		var right := Vector3(cos(yaw), 0.0, -sin(yaw))
+		var ahead := Vector3(velocity.x, 0.0, velocity.z).limit_length(1.0) * 0.15
+		pos += right * (-FOOT_SPACING if left else FOOT_SPACING) * 1.5 + ahead
+	pos.y = surface
+	var strength := maxf(intensity, 0.4) * lerpf(0.8, 1.2, wade) * (1.5 if big else 1.0)
+	splashes.add(pos, velocity, strength)
 
 
 func _floor_collider() -> Object:

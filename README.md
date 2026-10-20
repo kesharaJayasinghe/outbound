@@ -47,6 +47,8 @@ island with eroded mountains, beaches, jungle, wildlife ambience and a swimmable
 - **Sound**: surf from the nearest shoreline, birdsong in the forest and wind at altitude.
   Footsteps match the ground (grass, sand, stone or water), and there are splashes and swim strokes.
 - **Footprints in the sand** that fade away after a few seconds.
+- **Splashes**: running or wading through shallow water kicks up spray and leaves spreading
+  foam rings; jumping in makes a bigger splash.
 - **Crafting and building**: craft a palm-frond lean-to shelter and place it anywhere dry and
   level enough. A preview shows green where it fits and red where it doesn't. On a slope the
   downhill posts stretch to reach the ground. Gathering isn't in yet, so building is free for
