@@ -25,6 +25,8 @@ island with eroded mountains, beaches, jungle, wildlife ambience and a swimmable
 - **Islet**: a small, low, sandy island (0.3× the main island's area) across ~160 m of
   deep sea to the west-south-west, with a few palms and grassy dunes. Its beach looks
   straight at the waterfall.
+- **Sky**: a sky gradient with soft fair-weather clouds that drift slowly with the wind and
+  catch the light around the sun.
 - **Vegetation**: coconut palms on the shore, rainforest trees, big-leaf undergrowth, scattered
   rocks and a dense GPU grass field around the player. Many of the beach palms carry bunches of
   green coconuts, with more lying in the sand underneath. Walk up to a fallen coconut and press

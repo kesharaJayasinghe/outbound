@@ -177,6 +177,12 @@ particles, and the river-rush loop pitched down as the roar).
   tuning static first. 3D on a `Radio` bus made in code (band-pass, EQ, compressor,
   `BUS_BOOST` gain and a limiter), which sends to `Ambience`. It needs a big `unit_size` and the
   boost to carry over the surf.
+- `shaders/sky.gdshader`: the sky (the scene's Sky material). It reproduces
+  ProceduralSkyMaterial's gradient and sun, plus 2D fBm clouds projected onto a flat layer
+  (no ray marching). The cloud drift is the global shader parameter `cloud_time`
+  (`project.godot` `[shader_globals]`), set by `world_generator.gd` `_process`. Don't use
+  TIME in the sky shader: it makes Godot re-render the radiance cubemap every frame, about
+  three times the cost (≈0.6 ms vs 0.2 ms on an M1 Pro at 720p).
 - `scripts/ui/map_view.gd`: the map (opened from the interaction menu). Packs heights, the
   inland mask and water heights into a float texture for `shaders/map.gdshader`, which does
   the colouring, hill shading and contours; markers are drawn on a Control on top. It pauses

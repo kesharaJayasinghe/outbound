@@ -159,6 +159,12 @@ func _ready() -> void:
 
 ## Runs the procedural pipeline (no scene nodes are built). Used by _ready and by the
 ## bake tool.
+## Drives the sky's cloud drift (shaders/sky.gdshader). It's a global shader parameter,
+## not TIME: a sky shader that uses TIME re-renders its lighting cubemap every frame.
+func _process(_delta: float) -> void:
+	RenderingServer.global_shader_parameter_set(&"cloud_time", Time.get_ticks_msec() / 1000.0)
+
+
 func generate() -> void:
 	if terrain_seed == 0:
 		terrain_seed = randi_range(1, 999999)  # Pick one so it can be reported and baked

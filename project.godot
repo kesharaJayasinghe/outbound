@@ -79,3 +79,10 @@ sit={
 [rendering]
 
 rendering_device/driver.windows="d3d12"
+
+[shader_globals]
+
+cloud_time={
+"type": "float",
+"value": 0.0
+}

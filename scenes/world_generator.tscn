@@ -3,17 +3,13 @@
 [ext_resource type="Script" uid="uid://cfdhhjxk2aqqj" path="res://scripts/world/world_generator.gd" id="1_yncnp"]
 [ext_resource type="PackedScene" uid="uid://dnayudnhdmw1b" path="res://scenes/player.tscn" id="2_g11jo"]
 [ext_resource type="Resource" path="res://world/island.tres" id="3_island"]
+[ext_resource type="Shader" path="res://shaders/sky.gdshader" id="4_sky"]
 
-[sub_resource type="ProceduralSkyMaterial" id="PhysicalSkyMaterial_nd7rt"]
-sky_top_color = Color(0.16, 0.38, 0.78, 1)
-sky_horizon_color = Color(0.62, 0.76, 0.9, 1)
-sky_curve = 0.12
-ground_bottom_color = Color(0.1, 0.22, 0.3, 1)
-ground_horizon_color = Color(0.62, 0.76, 0.9, 1)
-sun_angle_max = 20.0
+[sub_resource type="ShaderMaterial" id="ShaderMaterial_sky"]
+shader = ExtResource("4_sky")
 
 [sub_resource type="Sky" id="Sky_n4ggf"]
-sky_material = SubResource("PhysicalSkyMaterial_nd7rt")
+sky_material = SubResource("ShaderMaterial_sky")
 
 [sub_resource type="Environment" id="Environment_fs00h"]
 background_mode = 2
