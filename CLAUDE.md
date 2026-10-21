@@ -112,14 +112,23 @@ particles, and the river-rush loop pitched down as the roar).
   the gull mesh (`birds.gd` `_bird_mesh`, which has legs) and `bird.gdshader`, where
   INSTANCE_CUSTOM.a folds the wings and drops the legs, and .b is the walking speed on the
   ground. Only wing triangles carry UV2.x: anything with UV2.x > 0 flaps and folds.
+- Berries (`vegetation.gd`, `proc_mesh.gd`): `bush()` stores its leaf balls as mesh meta
+  `blobs`, and `berry_cluster` hangs berry bunches on their outside, with the leaf cards' sway
+  weights (`BUSH_SWAY`), drawn with the bush's own transform (`shaders/fruit.gdshader`,
+  COLOR.r = ripeness). `BERRY_CHANCE` of bushes get one, from their own RNG (`berry_rng`).
+  pickups.gd splits them into MultiMeshes per bush shape and `CHUNK_SIZE` chunk, so they can
+  have a visibility range (`BERRY_RANGE`); picking hides the cluster and the player holds
+  `berry_handful_mesh`.
 - Coconuts (`vegetation.gd`, `proc_mesh.gd`): `palm()` stores its crown position as mesh meta
   (`crown`). Each palm shape gets a matching `coconut_cluster` mesh, drawn with the palm's own
   transform and `CROWN_SWAY` as its sway weight, so it moves exactly with the top of the trunk
   in the bark shader's wind. Coconut placement uses its own RNG (`coco_rng`), so it never shifts
   the tree layout. Keep it that way for future additions to the scatter passes.
 - `pickups.gd`: things the player can pick up or knock down. Vegetation hands over the fallen
-  coconuts, loose rocks (the "odd lone rock" scatter branch, with their collider owner ids) and
-  the coconut bunches, so they're out of its chunked batches. There's one MultiMesh per kind
+  coconuts, loose rocks (the "odd lone rock" scatter branch, with their collider owner ids),
+  the coconut bunches and the berry bushes' berries, so they're out of its chunked batches.
+  An item's `reach` is how far its edge is from its origin (rocks, bushes): the prompt and the
+  pick spot measure from there. There's one MultiMesh per kind
   (mesh). Rocks give `STONES_PER_METRE` × size stones, and the player lifts a hand-sized stone off
   the rock. `knock(point)` drops a bunch's coconuts (meta `nuts` on the cluster mesh), which fall
   and then become pickable; their MultiMesh slots are pooled. `bunch_on_line` is the aim assist

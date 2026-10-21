@@ -9,6 +9,7 @@ const RESOURCE_NAMES := {
 	&"fibre": "Fibre",
 	&"coconut": "Coconuts",
 	&"stone": "Stones",
+	&"berries": "Berries",
 }
 
 const RECIPES := [

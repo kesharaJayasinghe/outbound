@@ -9,6 +9,7 @@ const GRASS_SHADER = preload("res://shaders/grass.gdshader")
 const FOLIAGE_SHADER = preload("res://shaders/foliage.gdshader")
 const BARK_SHADER = preload("res://shaders/bark.gdshader")
 const ROCK_SHADER = preload("res://shaders/rock.gdshader")
+const FRUIT_SHADER = preload("res://shaders/fruit.gdshader")
 
 const CHUNK_SIZE = 128.0       # Metres per scatter chunk side (smaller culls better, but more draw calls)
 const GRASS_SPACING = 0.35     # Metres between grass clumps
@@ -19,6 +20,7 @@ const ISLET_PALMS = 0.12       # Palm chance per tree spot in an islet's palm cl
 const ISLET_BUSHES = 0.25      # Bush density on islets, relative to the main island
 const COCONUT_CHANCE = 0.55    # Palms on the sand that carry a bunch of coconuts
 const FALLEN_CHANCE = 0.4      # ...and that have a coconut or two lying underneath
+const BERRY_CHANCE = 0.18      # Bushes that carry berries
 
 var gen: Node3D
 var rng := RandomNumberGenerator.new()
@@ -31,13 +33,16 @@ var buckets := {}              # [mesh, chunk] -> {mesh, xforms, vis_end}
 var body: StaticBody3D
 var grass_root: Node3D
 var grass_material: ShaderMaterial
-# Handed to pickups.gd, which draws them (so single ones can be taken or knocked down)
+# Handed to pickups.gd, which draws them (so single ones can be taken, picked or knocked down)
 var fallen_coconuts: Array[Transform3D] = []
 var fallen_coconut_mesh: Mesh
 var coconut_bunches: Array[Dictionary] = []  # {kind (index into coconut_cluster_meshes), xform}
 var coconut_cluster_meshes: Array[Mesh] = []
 var loose_rocks: Array[Dictionary] = []      # {kind (index into rock_meshes), xform, size, collider}
 var rock_meshes: Array[Mesh] = []
+var berry_bushes: Array[Dictionary] = []     # {kind (index into berry_meshes), xform}
+var berry_meshes: Array[Mesh] = []           # One berry_cluster per bush shape
+var berry_handful_mesh: Mesh
 
 
 func build(generator: Node3D) -> void:
@@ -255,6 +260,14 @@ func _scatter_bushes() -> void:
 	var meshes: Array[Mesh] = []
 	for i in 3:
 		meshes.append(ProcMesh.bush(rng, mat))
+	# Berries use their own random numbers, so adding them doesn't move any bushes
+	var berry_rng := RandomNumberGenerator.new()
+	berry_rng.seed = gen.terrain_seed + 4409
+	var fruit := ShaderMaterial.new()
+	fruit.shader = FRUIT_SHADER
+	for bush in meshes:
+		berry_meshes.append(ProcMesh.berry_cluster(berry_rng, bush, fruit))
+	berry_handful_mesh = ProcMesh.berry_handful(berry_rng, fruit)
 
 	if gen.bush_density <= 0.0:
 		return
@@ -270,7 +283,11 @@ func _scatter_bushes() -> void:
 		if rng.randf() < p:
 			var s := rng.randf_range(0.6, 1.4)
 			var rot := Basis(Vector3.UP, rng.randf() * TAU).scaled(Vector3(s, s * rng.randf_range(0.8, 1.2), s))
-			_add(meshes[rng.randi() % meshes.size()], Transform3D(rot, Vector3(x, h - 0.1, z)), 220.0)
+			var kind := rng.randi() % meshes.size()
+			var xform := Transform3D(rot, Vector3(x, h - 0.1, z))
+			_add(meshes[kind], xform, 220.0)
+			if berry_rng.randf() < BERRY_CHANCE:
+				berry_bushes.append({"kind": kind, "xform": xform})
 	)
 
 

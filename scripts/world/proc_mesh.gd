@@ -344,21 +344,99 @@ static func broadleaf(rng: RandomNumberGenerator, bark: Material, leaf: Material
 
 
 ## Low, broad-leaved understorey plant.
+## A bush: two or three overlapping balls of leaf cards. The balls are stored as mesh
+## meta `blobs` (Vector4: centre, radius), for hanging berries on it (berry_cluster).
 static func bush(rng: RandomNumberGenerator, leaf: Material) -> ArrayMesh:
 	var b := Builder.new()
+	var blobs: Array[Vector4] = []
 	for i in rng.randi_range(2, 3):
 		var radius := rng.randf_range(0.6, 1.0)
 		var center := Vector3(rng.randf_range(-0.5, 0.5), radius * 0.7, rng.randf_range(-0.5, 0.5))
+		blobs.append(Vector4(center.x, center.y, center.z, radius))
 		for j in int(radius * radius * 16.0):
 			var dir := _random_unit(rng)
 			dir.y = absf(dir.y) * 0.8 + 0.2
 			var pos := center + dir.normalized() * radius * (0.4 + 0.6 * rng.randf())
 			var out := (pos - Vector3(0.0, -0.3, 0.0)).normalized()
 			var facing := (out + _random_unit(rng) * 0.7).normalized()
-			_card(b, rng, pos, facing, out, rng.randf_range(0.6, 0.9), pos.y * 0.04, 0.6)
+			_card(b, rng, pos, facing, out, rng.randf_range(0.6, 0.9), pos.y * BUSH_SWAY, 0.6)
 	var mesh := ArrayMesh.new()
 	b.commit(mesh, leaf)
+	mesh.set_meta(&"blobs", blobs)
 	return mesh
+
+
+## Bunches of berries poking out of a bush's leaves, drawn with the bush's own transform.
+## Sway weights match the leaf cards (UV2.x = height * BUSH_SWAY), so the berries move
+## with the bush in the wind. COLOR.r is the ripeness of each berry (fruit.gdshader).
+static func berry_cluster(rng: RandomNumberGenerator, bush_mesh: Mesh, material: Material) -> ArrayMesh:
+	var b := Builder.new()
+	var blobs: Array[Vector4] = bush_mesh.get_meta(&"blobs")
+	for blob in blobs:
+		var centre := Vector3(blob.x, blob.y, blob.z)
+		for k in rng.randi_range(4, 6):
+			# On the outside of the leaf ball, mostly round the sides and top
+			var dir := _random_unit(rng)
+			dir.y = absf(dir.y) * 0.7 + 0.05
+			dir = dir.normalized()
+			var at := centre + dir * blob.w * rng.randf_range(0.92, 1.05)
+			_berry_bunch(b, rng, at, dir, BUSH_SWAY)
+	var mesh := ArrayMesh.new()
+	b.commit(mesh, material)
+	mesh.set_meta(&"radius", _bush_radius(blobs))
+	return mesh
+
+
+## A handful of berries, held in the hand when picked (no sway)
+static func berry_handful(rng: RandomNumberGenerator, material: Material) -> ArrayMesh:
+	var b := Builder.new()
+	_berry_bunch(b, rng, Vector3(0.0, 0.03, 0.0), Vector3.UP, 0.0)
+	var mesh := ArrayMesh.new()
+	b.commit(mesh, material)
+	return mesh
+
+
+## How far the bush reaches out from its root, horizontally (metres, unscaled)
+static func _bush_radius(blobs: Array[Vector4]) -> float:
+	var r := 0.0
+	for blob in blobs:
+		r = maxf(r, Vector2(blob.x, blob.z).length() + blob.w * 0.85)
+	return r
+
+
+const BUSH_SWAY = 0.04  # A bush leaf card's sway weight per metre of height
+const BERRY_RADIUS = 0.05
+
+
+## A few round berries packed round `at`, bulging out along `out`
+static func _berry_bunch(b: Builder, rng: RandomNumberGenerator, at: Vector3, out: Vector3, sway: float) -> void:
+	var ripe := rng.randf() < 0.85  # The odd bunch is still green
+	for k in rng.randi_range(3, 5):
+		var offset := _random_unit(rng) * BERRY_RADIUS * 1.3
+		offset -= out * minf(0.0, offset.dot(out))  # Keep them on the outer side
+		var p := at + offset
+		var ripeness := rng.randf_range(0.75, 1.0) if ripe else rng.randf_range(0.0, 0.2)
+		_ball(b, p, BERRY_RADIUS * rng.randf_range(0.8, 1.15), p.y * sway, ripeness)
+
+
+## A small low-poly sphere (berries)
+static func _ball(b: Builder, at: Vector3, radius: float, sway: float, tint: float) -> void:
+	const RINGS = 4
+	const SIDES = 6
+	var first := b.verts.size()
+	var c := Color(tint, 0.0, 0.0)
+	for r in RINGS + 1:
+		var lat := PI * r / RINGS - PI * 0.5
+		for k in SIDES:
+			var lon := TAU * k / SIDES
+			var n := Vector3(cos(lon) * cos(lat), sin(lat), sin(lon) * cos(lat))
+			b.add(at + n * radius, n, Vector2(float(k) / SIDES, float(r) / RINGS), Vector2(sway, 0.0), c)
+	for r in RINGS:
+		for k in SIDES:
+			var a := first + r * SIDES + k
+			var d := first + r * SIDES + (k + 1) % SIDES
+			b.tri(a, a + SIDES, d)
+			b.tri(a + SIDES, d + SIDES, d)
 
 
 ## Paints a cluster of leaves into an RGBA texture. The leaves are near-neutral

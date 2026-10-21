@@ -28,7 +28,9 @@ island with eroded mountains, beaches, jungle, wildlife ambience and a swimmable
 - **Vegetation**: coconut palms on the shore, rainforest trees, big-leaf undergrowth, scattered
   rocks and a dense GPU grass field around the player. Many of the beach palms carry bunches of
   green coconuts, with more lying in the sand underneath. Walk up to a fallen coconut and press
-  E: the player steps over, bends down and picks it up; it grows back after a while. It all sways in shared wind, and every
+  E: the player steps over, bends down and picks it up; it grows back after a while. Some of
+  the bushes carry bunches of red berries (with the odd unripe green one): press E at one to
+  pick a handful, and the bush fruits again later. It all sways in shared wind, and every
   mesh and leaf texture is generated in code.
 - **Gathering and the hotbar**: gather loose rocks with E for 3–10 stones each. Gathered
   tools and materials fill a six-slot hotbar (keys 1–6; press a slot's key again to put it
