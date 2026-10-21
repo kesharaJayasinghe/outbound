@@ -12,6 +12,7 @@ extends Node
 
 const RECIPES = preload("res://scripts/build/recipes.gd")
 const MAP_VIEW = preload("res://scripts/ui/map_view.gd")
+const COMPASS = preload("res://scripts/ui/compass.gd")
 
 const MIN_DISTANCE = 3.5     # Closest the preview's centre gets to the player (metres)
 const MAX_DISTANCE = 9.0     # Furthest away the player can build
@@ -92,6 +93,10 @@ func setup(generator: Node3D, player_node: CharacterBody3D) -> void:
 	map_view.name = "MapView"
 	add_child(map_view)
 	map_view.setup(gen, player, structures)
+	var compass := COMPASS.new()
+	compass.name = "Compass"
+	hud.add_child(compass)
+	compass.setup(player, structures)
 
 
 ## Default key (and controller button) for an input action, unless the project

@@ -67,6 +67,9 @@ island with eroded mountains, beaches, jungle, wildlife ambience and a swimmable
 - **Map**: a shaded map of the island with contour lines, rivers, your position and facing,
   and your shelters, plus your coordinates, elevation and compass bearing. The game pauses
   while it's open; scroll to zoom in around you.
+- **Compass**: a bar at the top of the screen shows the direction you're facing (N, NE, E…
+  and the bearing in degrees), with markers for your shelters and radio and how far away
+  they are.
 
 ## Running
 
