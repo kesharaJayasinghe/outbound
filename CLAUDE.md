@@ -114,8 +114,8 @@ particles, and the river-rush loop pitched down as the roar).
   ground. Only wing triangles carry UV2.x: anything with UV2.x > 0 flaps and folds.
 - Berries (`vegetation.gd`, `proc_mesh.gd`): `bush()` stores its leaf balls as mesh meta
   `blobs`, and `berry_cluster` hangs berry bunches on their outside, with the leaf cards' sway
-  weights (`BUSH_SWAY`), drawn with the bush's own transform (`shaders/fruit.gdshader`,
-  COLOR.r = ripeness). `BERRY_CHANCE` of bushes get one, from their own RNG (`berry_rng`).
+  weights (`BUSH_SWAY`), drawn with the bush's own transform (`shaders/fruit.gdshader`:
+  albedo is the vertex COLOR, written linear by `_fruit_ball`). `BERRY_CHANCE` of bushes get one, from their own RNG (`berry_rng`).
   pickups.gd splits them into MultiMeshes per bush shape and `CHUNK_SIZE` chunk, so they can
   have a visibility range (`BERRY_RANGE`); picking hides the cluster and the player holds
   `berry_handful_mesh`.
@@ -124,14 +124,21 @@ particles, and the river-rush loop pitched down as the roar).
   transform and `CROWN_SWAY` as its sway weight, so it moves exactly with the top of the trunk
   in the bark shader's wind. Coconut placement uses its own RNG (`coco_rng`), so it never shifts
   the tree layout. Keep it that way for future additions to the scatter passes.
+- Mangoes and oranges (`vegetation.gd`, `proc_mesh.gd`): `broadleaf()` stores its canopy
+  blobs (`blobs`, Vector4) and sway curve (`sway_k`: weight = y² × sway_k) as mesh meta.
+  `tree_fruit_cluster` builds one cluster per tree shape × canopy blob × fruit, hung at the
+  blob's outer rim (other blobs' leaves would hide it), with meta `nuts` and `fruit`, drawn
+  with the tree's own transform. `FRUIT_TREE_CHANCE` of rainforest trees bear one fruit, with
+  a cluster under each blob `FRUIT_BLOB_CHANCE` of the time, from `fruit_rng`.
 - `pickups.gd`: things the player can pick up or knock down. Vegetation hands over the fallen
   coconuts, loose rocks (the "odd lone rock" scatter branch, with their collider owner ids),
-  the coconut bunches and the berry bushes' berries, so they're out of its chunked batches.
+  the fruit bunches (coconuts, mangoes, oranges) and the berry bushes' berries, so they're out
+  of its chunked batches.
   An item's `reach` is how far its edge is from its origin (rocks, bushes): the prompt and the
   pick spot measure from there. There's one MultiMesh per kind
   (mesh). Rocks give `STONES_PER_METRE` × size stones, and the player lifts a hand-sized stone off
-  the rock. `knock(point)` drops a bunch's coconuts (meta `nuts` on the cluster mesh), which fall
-  and then become pickable; their MultiMesh slots are pooled. `bunch_on_line` is the aim assist
+  the rock. `knock(point)` drops a bunch's fruit (meta `nuts` on the cluster mesh), which falls
+  and then becomes pickable; each fruit's fallen MultiMesh (`fruit_kinds`) pools its slots. `bunch_on_line` is the aim assist
   for throws, since bunches have no collision. For each item,
   E calls `player.pick_up`, which walks to a spot set by `PICK_REACH`, plays the pick clip and
   calls back: on the grab the instance is hidden (zero scale) and the player draws the item on

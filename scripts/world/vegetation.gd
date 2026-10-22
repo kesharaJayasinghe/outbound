@@ -21,6 +21,8 @@ const ISLET_BUSHES = 0.25      # Bush density on islets, relative to the main is
 const COCONUT_CHANCE = 0.55    # Palms on the sand that carry a bunch of coconuts
 const FALLEN_CHANCE = 0.4      # ...and that have a coconut or two lying underneath
 const BERRY_CHANCE = 0.18      # Bushes that carry berries
+const FRUIT_TREE_CHANCE = 0.15 # Rainforest trees that bear mangoes or oranges
+const FRUIT_BLOB_CHANCE = 0.7  # ...with a cluster under each part of the canopy this often
 
 var gen: Node3D
 var rng := RandomNumberGenerator.new()
@@ -43,6 +45,9 @@ var rock_meshes: Array[Mesh] = []
 var berry_bushes: Array[Dictionary] = []     # {kind (index into berry_meshes), xform}
 var berry_meshes: Array[Mesh] = []           # One berry_cluster per bush shape
 var berry_handful_mesh: Mesh
+var tree_fruit: Array[Dictionary] = []       # {kind (index into tree_fruit_meshes), xform}
+var tree_fruit_meshes: Array[Mesh] = []      # One tree_fruit_cluster per tree shape, canopy blob and fruit
+var fallen_fruit_meshes := {}                # Fruit id -> mesh of one lying on the ground
 
 
 func build(generator: Node3D) -> void:
@@ -198,6 +203,20 @@ func _scatter_trees() -> void:
 	var fallen := ProcMesh.fallen_coconut(coco_rng, green_husk)
 	fallen_coconut_mesh = fallen
 	coconut_cluster_meshes = clusters
+	# Mangoes and oranges, also with their own random numbers: a cluster mesh for every
+	# canopy blob of every tree shape, for each fruit
+	var fruit_rng := RandomNumberGenerator.new()
+	fruit_rng.seed = gen.terrain_seed + 5507
+	var fruit_mat := ShaderMaterial.new()
+	fruit_mat.shader = FRUIT_SHADER
+	var fruit_mesh_index := {}  # Vector3i(tree shape, fruit, blob) -> index into tree_fruit_meshes
+	for t in jungle.size():
+		for f in ProcMesh.FRUITS.size():
+			for bi in (jungle[t].get_meta(&"blobs") as Array).size():
+				fruit_mesh_index[Vector3i(t, f, bi)] = tree_fruit_meshes.size()
+				tree_fruit_meshes.append(ProcMesh.tree_fruit_cluster(fruit_rng, jungle[t], bi, ProcMesh.FRUITS[f], fruit_mat))
+	for fruit in ProcMesh.FRUITS:
+		fallen_fruit_meshes[fruit] = ProcMesh.fallen_fruit(fruit_rng, fruit, fruit_mat)
 
 	if gen.tree_density <= 0.0:
 		return
@@ -244,7 +263,14 @@ func _scatter_trees() -> void:
 			_add_collider(col, Transform3D(Basis(), Vector3(x, h + 1.4, z)))
 		elif r < palm_p + jungle_p:
 			var s := rng.randf_range(0.8, 1.3)
-			_add(jungle[rng.randi() % jungle.size()], Transform3D(rot.scaled(Vector3.ONE * s), Vector3(x, h - 0.2, z)))
+			var kind := rng.randi() % jungle.size()
+			var xform := Transform3D(rot.scaled(Vector3.ONE * s), Vector3(x, h - 0.2, z))
+			_add(jungle[kind], xform)
+			if fruit_rng.randf() < FRUIT_TREE_CHANCE:
+				var f := fruit_rng.randi() % ProcMesh.FRUITS.size()
+				for bi in (jungle[kind].get_meta(&"blobs") as Array).size():
+					if fruit_rng.randf() < FRUIT_BLOB_CHANCE:
+						tree_fruit.append({"kind": fruit_mesh_index[Vector3i(kind, f, bi)], "xform": xform})
 			var col := CylinderShape3D.new()
 			col.radius = 0.32 * s
 			col.height = 4.0

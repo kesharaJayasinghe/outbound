@@ -1,12 +1,13 @@
 extends Node3D
 
-## Things lying about that the player can pick up, and the coconut bunches on the beach
-## palms (all handed over by vegetation.gd):
+## Things lying about that the player can pick up, and the fruit hanging in the trees
+## (all handed over by vegetation.gd):
 ##   - fallen coconuts: "E  Pick up coconut" (+1 coconut)
 ##   - loose rocks: "E  Gather rock" (+3..10 stones, by size); the player lifts a stone off
 ##     it and the rock is gone
-##   - coconut bunches: hit one with a thrown stone (hotbar.gd) and its coconuts fall to
-##     the ground, to be picked up like the fallen ones
+##   - fruit bunches (coconuts on the beach palms, mangoes and oranges in some rainforest
+##     trees): hit one with a thrown stone (hotbar.gd) and its fruit falls to the ground,
+##     to be picked up like the fallen coconuts
 ##   - berry bushes: "E  Pick berries" (+3..6 berries); the berries are gone from the bush
 ##     until they grow back
 ## Walk up to something and a prompt appears; the player then bends down and picks it up
@@ -39,10 +40,11 @@ var kinds: Array[Dictionary] = []
 ## id, name, amount, state, taken_at, collider, regrows, velocity, reach (from the origin to
 ## its edge: you pick from there)}
 var items: Array[Dictionary] = []
-## Coconut bunches on palms: {kind, slot, xform, nuts (world positions), down_at (-1 while up)}
+## Fruit bunches in the trees: {kind, slot, xform, nuts (world positions), fruit (id),
+## down_at (-1 while up)}
 var bunches: Array[Dictionary] = []
-var coconut_kind := -1
-var spare_coconuts: Array[int] = []   # Free slots in the coconut MultiMesh, for knocked-down ones
+## Fallen fruit, per fruit id: {kind, spare (free slots in its MultiMesh, for knocked-down ones)}
+var fruit_kinds := {}
 var prompt: Label
 var nearest := -1
 var clock := 0.0
@@ -56,16 +58,26 @@ func setup(generator: Node3D, player_node: Node3D, vegetation_node: Node, builde
 	builder = builder_node
 	builder._ensure_action(&"interact", KEY_E, JOY_BUTTON_X)
 
-	# Fallen coconuts, with spare room for the ones knocked out of the palms
-	var nut_count := 0
+	# Fallen fruit (coconuts under the palms), with spare room for the fruit knocked out of
+	# the trees
+	var hanging := {&"coconut": 0}  # Fruit id -> how many hang in the trees
 	for b in vegetation.coconut_bunches:
-		nut_count += (vegetation.coconut_cluster_meshes[b.kind].get_meta(&"nuts") as PackedVector3Array).size()
+		hanging[&"coconut"] += (vegetation.coconut_cluster_meshes[b.kind].get_meta(&"nuts") as PackedVector3Array).size()
+	for b in vegetation.tree_fruit:
+		var mesh: Mesh = vegetation.tree_fruit_meshes[b.kind]
+		var fruit: StringName = mesh.get_meta(&"fruit")
+		hanging[fruit] = hanging.get(fruit, 0) + (mesh.get_meta(&"nuts") as PackedVector3Array).size()
 	var fallen: Array[Transform3D] = vegetation.fallen_coconuts
-	coconut_kind = _add_kind(vegetation.fallen_coconut_mesh, fallen.size() + nut_count)
+	for fruit: StringName in hanging:
+		var lying := fallen.size() if fruit == &"coconut" else 0
+		var mesh: Mesh = vegetation.fallen_coconut_mesh if fruit == &"coconut" else vegetation.fallen_fruit_meshes[fruit]
+		var kind := _add_kind(mesh, lying + hanging[fruit])
+		var spare: Array[int] = []
+		for k in hanging[fruit]:
+			spare.append(lying + k)
+		fruit_kinds[fruit] = {"kind": kind, "spare": spare}
 	for xform in fallen:
-		_add_item(coconut_kind, xform, &"coconut", "coconut", 1, -1, true)
-	for k in nut_count:
-		spare_coconuts.append(fallen.size() + k)
+		_add_item(fruit_kinds[&"coconut"].kind, xform, &"coconut", "coconut", 1, -1, true)
 
 	# Loose rocks, one MultiMesh per rock shape
 	var rock_kinds: Array[int] = []
@@ -102,24 +114,10 @@ func setup(generator: Node3D, player_node: Node3D, vegetation_node: Node, builde
 			var reach: float = mesh.get_meta(&"radius") * xform.basis.get_scale().x
 			_add_item(kind, xform, &"berries", "berries", berry_rng.randi_range(BERRIES.x, BERRIES.y), -1, true, reach)
 
-	# Coconut bunches, one MultiMesh per palm shape (they sway with their palm)
-	var bunch_kinds: Array[int] = []
-	for c in vegetation.coconut_cluster_meshes.size():
-		var count := 0
-		for b in vegetation.coconut_bunches:
-			if b.kind == c:
-				count += 1
-		bunch_kinds.append(_add_kind(vegetation.coconut_cluster_meshes[c], count))
-	for b: Dictionary in vegetation.coconut_bunches:
-		var kind: int = bunch_kinds[b.kind]
-		var slot: int = kinds[kind].next
-		kinds[kind].next = slot + 1
-		var xform: Transform3D = b.xform
-		var nuts := PackedVector3Array()
-		for p in (vegetation.coconut_cluster_meshes[b.kind].get_meta(&"nuts") as PackedVector3Array):
-			nuts.append(xform * p)
-		(kinds[kind].multimesh as MultiMesh).set_instance_transform(slot, xform)
-		bunches.append({"kind": kind, "slot": slot, "xform": xform, "nuts": nuts, "down_at": -1.0})
+	# Fruit bunches, one MultiMesh per cluster mesh (each drawn with its tree's transform, so
+	# it sways with it)
+	_add_bunches(vegetation.coconut_cluster_meshes, vegetation.coconut_bunches)
+	_add_bunches(vegetation.tree_fruit_meshes, vegetation.tree_fruit)
 
 	# The prompt, above the hotbar and the builder's status line
 	prompt = builder._hud_label(Color(1, 1, 1, 0.9))
@@ -129,6 +127,29 @@ func setup(generator: Node3D, player_node: Node3D, vegetation_node: Node, builde
 	prompt.offset_bottom = -150
 	prompt.visible = false
 	builder.hud.add_child(prompt)
+
+
+## `list` holds {kind (index into `meshes`), xform} for each bunch
+func _add_bunches(meshes: Array[Mesh], list: Array[Dictionary]) -> void:
+	var bunch_kinds: Array[int] = []
+	for c in meshes.size():
+		var count := 0
+		for b in list:
+			if b.kind == c:
+				count += 1
+		bunch_kinds.append(_add_kind(meshes[c], count) if count > 0 else -1)
+	for b: Dictionary in list:
+		var kind: int = bunch_kinds[b.kind]
+		var slot: int = kinds[kind].next
+		kinds[kind].next = slot + 1
+		var xform: Transform3D = b.xform
+		var mesh: Mesh = meshes[b.kind]
+		var nuts := PackedVector3Array()
+		for p in (mesh.get_meta(&"nuts") as PackedVector3Array):
+			nuts.append(xform * p)
+		(kinds[kind].multimesh as MultiMesh).set_instance_transform(slot, xform)
+		bunches.append({"kind": kind, "slot": slot, "xform": xform, "nuts": nuts,
+				"fruit": mesh.get_meta(&"fruit", &"coconut"), "down_at": -1.0})
 
 
 func _add_kind(mesh: Mesh, capacity: int, vis_end := 0.0) -> int:
@@ -246,9 +267,9 @@ func _collect(k: int) -> void:
 	inventory.add(item.id, item.amount)
 	builder._toast("+%d %s  (%d)" % [item.amount, _item_name(item.id, item.amount), inventory.count(item.id)])
 	if not item.regrows:
-		# A knocked-down coconut: its slot goes back for the next bunch
+		# Knocked-down fruit: its slot goes back for the next bunch
 		item.state = State.SPARE
-		spare_coconuts.append(item.slot)
+		(fruit_kinds[item.id].spare as Array[int]).append(item.slot)
 
 
 static func _item_name(id: StringName, amount: int) -> String:
@@ -259,10 +280,14 @@ static func _item_name(id: StringName, amount: int) -> String:
 			return "Coconut" if amount == 1 else "Coconuts"
 		&"berries":
 			return "Berry" if amount == 1 else "Berries"
+		&"mango":
+			return "Mango" if amount == 1 else "Mangoes"
+		&"orange":
+			return "Orange" if amount == 1 else "Oranges"
 	return String(id).capitalize()
 
 
-## The middle of the closest standing coconut bunch within `tolerance` metres of a line of
+## The middle of the closest standing fruit bunch within `tolerance` metres of a line of
 ## sight (from `from` along `dir`, up to `reach`), or Vector3.INF. Bunches have no
 ## collision, so a throw aims at them this way.
 func bunch_on_line(from: Vector3, dir: Vector3, reach: float, tolerance: float) -> Vector3:
@@ -288,8 +313,8 @@ func _bunch_centre(b: Dictionary) -> Vector3:
 	return centre / (b.nuts as PackedVector3Array).size()
 
 
-## A thrown stone at `point`: knocks down a coconut bunch it passes close to, dropping its
-## coconuts. Returns true if it did.
+## A thrown stone at `point`: knocks down a fruit bunch it passes close to, dropping its
+## fruit. Returns true if it did.
 func knock(point: Vector3) -> bool:
 	for b in bunches:
 		if b.down_at >= 0.0:
@@ -300,20 +325,23 @@ func knock(point: Vector3) -> bool:
 			continue
 		b.down_at = clock
 		(kinds[b.kind].multimesh as MultiMesh).set_instance_transform(b.slot, _hidden(centre))
+		var fruit: StringName = b.fruit
+		var fallen: Dictionary = fruit_kinds[fruit]
+		var spare: Array[int] = fallen.spare
 		for p in nuts:
-			if spare_coconuts.is_empty():
+			if spare.is_empty():
 				break
-			var slot: int = spare_coconuts.pop_back()
+			var slot: int = spare.pop_back()
 			var xform := Transform3D(Basis(Vector3.UP, randf() * TAU), p)
-			(kinds[coconut_kind].multimesh as MultiMesh).set_instance_transform(slot, xform)
-			items.append({"kind": coconut_kind, "slot": slot, "xform": xform, "id": &"coconut", "name": "coconut",
+			(kinds[fallen.kind].multimesh as MultiMesh).set_instance_transform(slot, xform)
+			items.append({"kind": fallen.kind, "slot": slot, "xform": xform, "id": fruit, "name": String(fruit),
 					"amount": 1, "state": State.FALLING, "taken_at": -1.0, "collider": -1, "regrows": false,
 					"velocity": Vector3(randf_range(-1.2, 1.2), randf_range(0.0, 1.0), randf_range(-1.2, 1.2)), "reach": 0.0})
 		return true
 	return false
 
 
-## Knocked-down coconuts drop to the ground, bounce a little and come to rest
+## Knocked-down fruit drops to the ground, bounce a little and come to rest
 func _fall(delta: float) -> void:
 	for item in items:
 		if item.state != State.FALLING:

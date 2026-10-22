@@ -340,6 +340,12 @@ static func broadleaf(rng: RandomNumberGenerator, bark: Material, leaf: Material
 	var mesh := ArrayMesh.new()
 	wood.commit(mesh, bark)
 	leaves.commit(mesh, leaf)
+	# For hanging fruit under the canopy (tree_fruit_cluster)
+	var canopy: Array[Vector4] = []
+	for bi in blobs.size():
+		canopy.append(Vector4(blobs[bi].x, blobs[bi].y, blobs[bi].z, blob_r[bi]))
+	mesh.set_meta(&"blobs", canopy)
+	mesh.set_meta(&"sway_k", sway_k)
 	return mesh
 
 
@@ -368,7 +374,7 @@ static func bush(rng: RandomNumberGenerator, leaf: Material) -> ArrayMesh:
 
 ## Bunches of berries poking out of a bush's leaves, drawn with the bush's own transform.
 ## Sway weights match the leaf cards (UV2.x = height * BUSH_SWAY), so the berries move
-## with the bush in the wind. COLOR.r is the ripeness of each berry (fruit.gdshader).
+## with the bush in the wind. COLOR is each berry's colour (fruit.gdshader).
 static func berry_cluster(rng: RandomNumberGenerator, bush_mesh: Mesh, material: Material) -> ArrayMesh:
 	var b := Builder.new()
 	var blobs: Array[Vector4] = bush_mesh.get_meta(&"blobs")
@@ -416,27 +422,131 @@ static func _berry_bunch(b: Builder, rng: RandomNumberGenerator, at: Vector3, ou
 		offset -= out * minf(0.0, offset.dot(out))  # Keep them on the outer side
 		var p := at + offset
 		var ripeness := rng.randf_range(0.75, 1.0) if ripe else rng.randf_range(0.0, 0.2)
-		_ball(b, p, BERRY_RADIUS * rng.randf_range(0.8, 1.15), p.y * sway, ripeness)
+		var colour := BERRY_UNRIPE.lerp(BERRY_RIPE, ripeness)
+		var radius := BERRY_RADIUS * rng.randf_range(0.8, 1.15)
+		_fruit_ball(b, p, Vector3.ONE * radius, Vector3.UP, p.y * sway, func(_n: Vector3) -> Color: return colour, 4, 6)
 
 
-## A small low-poly sphere (berries)
-static func _ball(b: Builder, at: Vector3, radius: float, sway: float, tint: float) -> void:
-	const RINGS = 4
-	const SIDES = 6
+const BERRY_UNRIPE = Color(0.42, 0.55, 0.16)
+const BERRY_RIPE = Color(0.72, 0.06, 0.08)
+
+
+## A low-poly ellipsoid (fruit) centred on `at`, `radii.y` along `axis`. `colour` gives
+## each vertex's colour from its normal (sRGB; stored linear for fruit.gdshader).
+static func _fruit_ball(b: Builder, at: Vector3, radii: Vector3, axis: Vector3, sway: float,
+		colour: Callable, rings: int, sides: int) -> void:
+	var u := axis.cross(Vector3.UP if absf(axis.y) < 0.9 else Vector3.RIGHT).normalized()
+	var v := axis.cross(u)
 	var first := b.verts.size()
-	var c := Color(tint, 0.0, 0.0)
-	for r in RINGS + 1:
-		var lat := PI * r / RINGS - PI * 0.5
-		for k in SIDES:
-			var lon := TAU * k / SIDES
-			var n := Vector3(cos(lon) * cos(lat), sin(lat), sin(lon) * cos(lat))
-			b.add(at + n * radius, n, Vector2(float(k) / SIDES, float(r) / RINGS), Vector2(sway, 0.0), c)
-	for r in RINGS:
-		for k in SIDES:
-			var a := first + r * SIDES + k
-			var d := first + r * SIDES + (k + 1) % SIDES
-			b.tri(a, a + SIDES, d)
-			b.tri(a + SIDES, d + SIDES, d)
+	for r in rings + 1:
+		var lat := PI * r / rings - PI * 0.5
+		for k in sides:
+			var lon := TAU * k / sides
+			var x := cos(lon) * cos(lat)
+			var y := sin(lat)
+			var z := sin(lon) * cos(lat)
+			var p := at + u * x * radii.x + axis * y * radii.y + v * z * radii.z
+			var n := (u * x / radii.x + axis * y / radii.y + v * z / radii.z).normalized()
+			var c: Color = colour.call(n)
+			b.add(p, n, Vector2(float(k) / sides, float(r) / rings), Vector2(sway, 0.0), c.srgb_to_linear())
+	for r in rings:
+		for k in sides:
+			var a := first + r * sides + k
+			var d := first + r * sides + (k + 1) % sides
+			b.tri(a, a + sides, d)
+			b.tri(a + sides, d + sides, d)
+
+
+# --- Tree fruit (mangoes, oranges) --------------------------------------------
+
+const FRUITS: Array[StringName] = [&"mango", &"orange"]
+const STEM_COLOUR = Color(0.33, 0.25, 0.12)
+
+
+## A cluster of 2-4 mangoes or oranges hanging on stalks under canopy blob `blob_index`
+## of a broadleaf tree. Drawn with the tree's own transform and the tree's sway curve
+## (UV2.x = y² * sway_k), so the fruit moves with the leaves. Mesh meta: `nuts` (where each
+## fruit hangs, for knocking them down in pickups.gd) and `fruit` (its id).
+static func tree_fruit_cluster(rng: RandomNumberGenerator, tree: Mesh, blob_index: int,
+		fruit: StringName, material: Material) -> ArrayMesh:
+	var blob: Vector4 = (tree.get_meta(&"blobs") as Array)[blob_index]
+	var sway_k: float = tree.get_meta(&"sway_k")
+	var centre := Vector3(blob.x, blob.y, blob.z)
+	# Out towards the rim, on the side away from the trunk (so no other part of the canopy is
+	# below it), and just under the leaves there (the blobs are flattened to 0.65 high)
+	var out := Vector2(blob.x, blob.z)
+	var az := (atan2(out.y, out.x) if out.length() > 0.5 else rng.randf() * TAU) + rng.randf_range(-0.8, 0.8)
+	var reach := blob.w * rng.randf_range(0.6, 0.8)
+	var hang := centre + Vector3(cos(az), 0.0, sin(az)) * reach
+	hang.y = centre.y - blob.w * 0.65 * sqrt(1.0 - pow(reach / blob.w, 2.0)) - 0.15
+	var b := Builder.new()
+	var nuts := PackedVector3Array()
+	var count := rng.randi_range(2, 4)
+	for k in count:
+		var side := TAU * k / count + rng.randf_range(-0.4, 0.4)
+		var at := hang + Vector3(cos(side) * 0.13, -rng.randf_range(0.45, 0.75), sin(side) * 0.13)
+		var top := at + Vector3.UP * (0.09 if fruit == &"mango" else 0.06)
+		_stalk(b, top, hang + Vector3(cos(side) * 0.04, 0.05, sin(side) * 0.04), sway_k)
+		_tree_fruit(b, rng, fruit, at, Vector3.UP.lerp(_random_unit(rng), 0.15).normalized(), at.y * at.y * sway_k)
+		nuts.append(at)
+	var mesh := ArrayMesh.new()
+	b.commit(mesh, material)
+	mesh.set_meta(&"nuts", nuts)
+	mesh.set_meta(&"fruit", fruit)
+	return mesh
+
+
+## One fruit lying on the ground (no sway), resting on y = 0
+static func fallen_fruit(rng: RandomNumberGenerator, fruit: StringName, material: Material) -> ArrayMesh:
+	var b := Builder.new()
+	if fruit == &"mango":
+		_tree_fruit(b, rng, fruit, Vector3(0.0, MANGO_RADII.x, 0.0), Vector3.RIGHT, 0.0)
+	else:
+		_tree_fruit(b, rng, fruit, Vector3(0.0, ORANGE_RADIUS, 0.0), Vector3.UP, 0.0)
+	var mesh := ArrayMesh.new()
+	b.commit(mesh, material)
+	return mesh
+
+
+# A little bigger than life, so they read from the ground under a tall tree
+const MANGO_RADII = Vector3(0.066, 0.095, 0.06)  # Across, along the stalk, front to back
+const ORANGE_RADIUS = 0.07
+
+
+## A mango (kidney-ish, green to yellow with a red blush on one side) or an orange
+## (round, the odd one still green), long axis along `axis`
+static func _tree_fruit(b: Builder, rng: RandomNumberGenerator, fruit: StringName, at: Vector3,
+		axis: Vector3, sway: float) -> void:
+	if fruit == &"mango":
+		var ripe := rng.randf_range(0.3, 1.0)
+		var base := Color(0.38, 0.55, 0.14).lerp(Color(0.95, 0.72, 0.18), ripe)
+		var blush_dir := _random_unit(rng)
+		var blush := Color(0.85, 0.28, 0.12)
+		var scale := rng.randf_range(0.9, 1.1)
+		_fruit_ball(b, at, MANGO_RADII * scale, axis, sway, func(n: Vector3) -> Color:
+			return base.lerp(blush, smoothstep(0.1, 0.9, n.dot(blush_dir)) * (0.3 + 0.6 * ripe)), 6, 8)
+	else:
+		var ripe := rng.randf() < 0.85
+		var base := Color(0.96, 0.52, 0.06) if ripe else Color(0.45, 0.6, 0.12)
+		base = base.lerp(Color(1.0, 0.65, 0.1), rng.randf_range(0.0, 0.3))
+		var r := ORANGE_RADIUS * rng.randf_range(0.9, 1.1)
+		_fruit_ball(b, at, Vector3(r, r * 0.95, r), axis, sway, func(n: Vector3) -> Color:
+			return base.darkened(0.12 * absf(n.dot(axis))), 5, 8)  # Darker at the ends
+
+
+## A fruit stalk: two crossed thin strips from `from` (on the fruit) up to `to`
+static func _stalk(b: Builder, from: Vector3, to: Vector3, sway_k: float) -> void:
+	var along := (to - from).normalized()
+	var c := STEM_COLOUR.srgb_to_linear()
+	for side: Vector3 in [Vector3.RIGHT, Vector3.FORWARD]:
+		var w := (side - along * side.dot(along)).normalized() * 0.006
+		var n := along.cross(w).normalized()
+		var i0 := b.add(from - w, n, Vector2.ZERO, Vector2(from.y * from.y * sway_k, 0.0), c)
+		var i1 := b.add(from + w, n, Vector2.ZERO, Vector2(from.y * from.y * sway_k, 0.0), c)
+		var i2 := b.add(to + w, n, Vector2.ZERO, Vector2(to.y * to.y * sway_k, 0.0), c)
+		var i3 := b.add(to - w, n, Vector2.ZERO, Vector2(to.y * to.y * sway_k, 0.0), c)
+		b.tri(i0, i1, i2)
+		b.tri(i0, i2, i3)
 
 
 ## Paints a cluster of leaves into an RGBA texture. The leaves are near-neutral

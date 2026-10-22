@@ -32,13 +32,16 @@ island with eroded mountains, beaches, jungle, wildlife ambience and a swimmable
   green coconuts, with more lying in the sand underneath. Walk up to a fallen coconut and press
   E: the player steps over, bends down and picks it up; it grows back after a while. Some of
   the bushes carry bunches of red berries (with the odd unripe green one): press E at one to
-  pick a handful, and the bush fruits again later. It all sways in shared wind, and every
+  pick a handful, and the bush fruits again later. Some rainforest trees bear mangoes or
+  oranges, hanging in clusters under the canopy: knock them down with a stone (see below).
+  It all sways in shared wind, and every
   mesh and leaf texture is generated in code.
 - **Gathering and the hotbar**: gather loose rocks with E for 3–10 stones each. Gathered
   tools and materials fill a six-slot hotbar (keys 1–6; press a slot's key again to put it
   away). Holding stones, an aiming dot appears; click and the player turns and throws one
-  overhand where it points, even on the move (the dot is ringed when a coconut bunch is lined
-  up): hit a coconut bunch on a beach palm and its coconuts fall, and a stone landing near
+  overhand where it points, even on the move (the dot is ringed when a fruit bunch is lined
+  up): hit a bunch of coconuts, mangoes or oranges and the fruit falls, to pick up with E.
+  A stone landing near
   gulls sends them off.
 - **Seabirds**: flocks of gulls circle over the coasts, the cliffs by the waterfall and the
   islet, gliding and banking with bursts of flapping, and calling now and then. More gulls

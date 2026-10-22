@@ -6,7 +6,7 @@ extends Node
 ## changes, then fades; while something's held, a small reminder stays in the corner.
 ##
 ## Held stones sit in the right hand. Click to throw one where the camera aims: the player
-## turns and throws overhand (player.throw), and the stone leaves the hand in a slight arc: a stone that passes a coconut bunch knocks it down (pickups.gd), and one
+## turns and throws overhand (player.throw), and the stone leaves the hand in a slight arc: a stone that passes a fruit bunch (coconuts, mangoes, oranges) knocks it down (pickups.gd), and one
 ## that lands near gulls on a beach sends them off (beach_birds.gd). Thrown stones are
 ## small rigid bodies that disappear a few seconds after landing.
 
@@ -21,7 +21,7 @@ const FADE_TIME = 0.6
 const THROW_SPEED = 20.0       # Metres per second
 const THROW_RANGE = 70.0       # Furthest aim point
 const OPEN_AIM = 30.0          # Aiming at nothing (the sky, open sea): throw for this distance
-const AIM_ASSIST = 1.2         # A coconut bunch this close to the line of sight is the target
+const AIM_ASSIST = 1.2         # A fruit bunch this close to the line of sight is the target
 const THROW_COOLDOWN = 0.55
 const STONE_LIFETIME = 6.0     # Seconds a thrown stone lasts
 const STONE_SIZE = 0.12        # Metres
@@ -48,7 +48,7 @@ var bar_alpha := 0.0
 var bar_timer := 0.0
 var reminder: Label
 var dot: Control               # Aiming dot at the centre of the view (where throws go)
-var dot_on_target := false     # A coconut bunch is lined up: drawn with a ring
+var dot_on_target := false     # A fruit bunch is lined up: drawn with a ring
 
 
 func setup(generator: Node3D, player_node: CharacterBody3D, builder_node: Node, pickups_node: Node,
@@ -125,7 +125,7 @@ func _holding() -> StringName:
 
 # --- Throwing ----------------------------------------------------------------------
 
-## Where the centre of the view points (or a coconut bunch close to that line)
+## Where the centre of the view points (or a fruit bunch close to that line)
 func _aim_target() -> Vector3:
 	var cam: Camera3D = player.camera
 	var from := cam.global_position
@@ -134,7 +134,7 @@ func _aim_target() -> Vector3:
 	query.exclude = [player.get_rid()]
 	var hit := player.get_world_3d().direct_space_state.intersect_ray(query)
 	var target: Vector3 = hit.position if hit else from + aim * OPEN_AIM
-	# Coconut bunches have no collision: aim at one if it's close to the line of sight
+	# Fruit bunches have no collision: aim at one if it's close to the line of sight
 	if pickups:
 		var reach: float = from.distance_to(target) if hit else THROW_RANGE
 		var bunch: Vector3 = pickups.bunch_on_line(from, aim, reach, AIM_ASSIST)

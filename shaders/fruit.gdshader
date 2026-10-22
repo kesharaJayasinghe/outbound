@@ -1,26 +1,22 @@
 shader_type spatial;
-render_mode world_vertex_coords, diffuse_burley, specular_schlick_ggx;
+render_mode world_vertex_coords, diffuse_burley, specular_schlick_ggx, cull_disabled;
 
-// Berries on the bushes (proc_mesh.gd berry_cluster). UV2.x is the sway weight, matching
-// the bush's leaf cards so the berries stay on it. COLOR.r is ripeness: unripe green to
-// ripe red. Glossy skin, with a little light glowing through it.
+// Fruit: berries on the bushes, mangoes and oranges in the trees, and fallen ones
+// (proc_mesh.gd). COLOR is the colour, painted per vertex (ripeness, a mango's blush,
+// the stalks). UV2.x is the sway weight, matching the plant it hangs on so it stays on.
+// Glossy skin, with a little light glowing through it, and a faint glow of its own so it
+// still reads in the shade of a canopy. Two-sided for the thin stalks.
 
 #include "res://shaders/wind.gdshaderinc"
 
-uniform vec3 color_unripe : source_color = vec3(0.42, 0.55, 0.16);
-uniform vec3 color_ripe : source_color = vec3(0.72, 0.06, 0.08);
-
-varying float ripeness;
-
 void vertex() {
 	VERTEX += wind_offset(MODEL_MATRIX[3].xyz, UV2.x, TIME);
-	ripeness = COLOR.r;
 }
 
 void fragment() {
-	vec3 col = mix(color_unripe, color_ripe, ripeness);
-	ALBEDO = col;
-	BACKLIGHT = col * 0.3;
-	ROUGHNESS = 0.3;
-	SPECULAR = 0.55;
+	ALBEDO = COLOR.rgb;
+	BACKLIGHT = COLOR.rgb * 0.3;
+	EMISSION = COLOR.rgb * 0.12;
+	ROUGHNESS = 0.35;
+	SPECULAR = 0.5;
 }
