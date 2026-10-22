@@ -23,6 +23,8 @@ const FALLEN_CHANCE = 0.4      # ...and that have a coconut or two lying underne
 const BERRY_CHANCE = 0.18      # Bushes that carry berries
 const FRUIT_TREE_CHANCE = 0.15 # Rainforest trees that bear mangoes or oranges
 const FRUIT_BLOB_CHANCE = 0.7  # ...with a cluster under each part of the canopy this often
+const TRUNK_CELL = 4.0         # Grid cell size for looking up trunks near a rock (metres)
+const TRUNK_CLEARANCE = 0.15   # Gap kept between a rock and a trunk (metres)
 
 var gen: Node3D
 var rng := RandomNumberGenerator.new()
@@ -48,6 +50,9 @@ var berry_handful_mesh: Mesh
 var tree_fruit: Array[Dictionary] = []       # {kind (index into tree_fruit_meshes), xform}
 var tree_fruit_meshes: Array[Mesh] = []      # One tree_fruit_cluster per tree shape, canopy blob and fruit
 var fallen_fruit_meshes := {}                # Fruit id -> mesh of one lying on the ground
+## Tree trunks, so rocks aren't placed through them: Vector2i cell -> Array of
+## {base (Vector2), radius, lean (Vector2: how far the trunk curves over, scaled), height}
+var trunks := {}
 
 
 func build(generator: Node3D) -> void:
@@ -249,6 +254,9 @@ func _scatter_trees() -> void:
 			var kind := rng.randi() % palms.size()
 			var xform := Transform3D(rot.scaled(Vector3.ONE * s), Vector3(x, h - 0.15, z))
 			_add(palms[kind], xform)
+			var crown: Vector3 = palms[kind].get_meta(&"crown")
+			var lean := rot * Vector3(crown.x * s, 0.0, 0.0)
+			_add_trunk(x, z, 0.25 * s, Vector2(lean.x, lean.z), crown.y * s)
 			# Coconuts on palms that stand on the beach sand
 			if above < gen.beach_height + 0.3 and coco_rng.randf() < COCONUT_CHANCE:
 				coconut_bunches.append({"kind": kind, "xform": xform})
@@ -266,6 +274,7 @@ func _scatter_trees() -> void:
 			var kind := rng.randi() % jungle.size()
 			var xform := Transform3D(rot.scaled(Vector3.ONE * s), Vector3(x, h - 0.2, z))
 			_add(jungle[kind], xform)
+			_add_trunk(x, z, 0.32 * s + 0.15, Vector2.ZERO, 8.0 * s)  # Allowing for its wander
 			if fruit_rng.randf() < FRUIT_TREE_CHANCE:
 				var f := fruit_rng.randi() % ProcMesh.FRUITS.size()
 				for bi in (jungle[kind].get_meta(&"blobs") as Array).size():
@@ -276,6 +285,31 @@ func _scatter_trees() -> void:
 			col.height = 4.0
 			_add_collider(col, Transform3D(Basis(), Vector3(x, h + 1.9, z)))
 	)
+
+
+## A palm's trunk curves over by `lean` at the top: x = lean * (2t - t²), t = height fraction
+func _add_trunk(x: float, z: float, radius: float, lean: Vector2, height: float) -> void:
+	var cell := Vector2i(floori(x / TRUNK_CELL), floori(z / TRUNK_CELL))
+	if not trunks.has(cell):
+		trunks[cell] = []
+	trunks[cell].append({"base": Vector2(x, z), "radius": radius, "lean": lean, "height": height})
+
+
+## Whether a rock of horizontal radius `radius` at `at`, standing `top` metres high, would
+## go through a tree trunk (checked at a few heights up the rock, as palms lean)
+func _hits_trunk(at: Vector2, radius: float, top: float) -> bool:
+	var cell := Vector2i(floori(at.x / TRUNK_CELL), floori(at.y / TRUNK_CELL))
+	for dx in range(-1, 2):
+		for dz in range(-1, 2):
+			for trunk: Dictionary in trunks.get(cell + Vector2i(dx, dz), []):
+				var height: float = trunk.height
+				var lean: Vector2 = trunk.lean
+				for k in 4:
+					var t := minf(top * k / 3.0 / height, 1.0)
+					var p: Vector2 = trunk.base + lean * (2.0 * t - t * t)
+					if p.distance_to(at) < radius + float(trunk.radius) + TRUNK_CLEARANCE:
+						return true
+	return false
 
 
 # --- Bushes --------------------------------------------------------------------
@@ -359,6 +393,9 @@ func _scatter_rocks() -> void:
 		rot = rot.scaled(Vector3(size, size * rng.randf_range(0.7, 1.1), size * rng.randf_range(0.8, 1.3)))
 		var origin := Vector3(x, h - size * 0.15, z)
 		var kind := rng.randi() % meshes.size()
+		# After every random roll, so leaving a rock out doesn't move any of the others
+		if _hits_trunk(Vector2(x, z), size * 0.65, size * 1.1):
+			return
 		if not loose:
 			_add(meshes[kind], Transform3D(rot, origin), 0.0 if size > 1.0 else 160.0)
 		var collider := -1

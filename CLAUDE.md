@@ -124,6 +124,10 @@ particles, and the river-rush loop pitched down as the roar).
   transform and `CROWN_SWAY` as its sway weight, so it moves exactly with the top of the trunk
   in the bark shader's wind. Coconut placement uses its own RNG (`coco_rng`), so it never shifts
   the tree layout. Keep it that way for future additions to the scatter passes.
+- Rocks stay off tree trunks: the tree pass records each trunk (`_add_trunk`, in a
+  `TRUNK_CELL` grid; palms with their lean) and the rock pass drops any rock that
+  `_hits_trunk`. The check comes after the rock's random rolls, so dropping one doesn't shift
+  the rest.
 - Mangoes and oranges (`vegetation.gd`, `proc_mesh.gd`): `broadleaf()` stores its canopy
   blobs (`blobs`, Vector4) and sway curve (`sway_k`: weight = y² × sway_k) as mesh meta.
   `tree_fruit_cluster` builds one cluster per tree shape × canopy blob × fruit, hung at the
