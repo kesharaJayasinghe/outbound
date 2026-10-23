@@ -206,9 +206,11 @@ particles, and the river-rush loop pitched down as the roar).
   fading Decal trail that sand steps leave behind. `water_splash.gd` is the same idea for steps in
   shallow water: pooled one-shot droplet bursts (GPUParticles3D) plus foam rings
   (`shaders/splash_ring.gdshader`, aged through an instance uniform), scaled by speed and depth. Swim strokes
-  splash at the entering hand (LeftHand/RightHand bone, alternating with `stroke_phase`). Swimming plays two hand-keyed clips
-  (`characters/human/swim_animations.res`: tread, crawl) blended by speed, each sought to a
-  phase the controller advances so splashes land on hand entry. Sitting (C) plays
+  splash at the entering hand (LeftHand/RightHand bone, alternating with `stroke_phase`). Swimming plays three hand-keyed clips
+  (`characters/human/swim_animations.res`): tread when still, and when moving breast
+  (breaststroke) or crawl while sprinting. A `stroke` Blend2 sits inside the tread/moving one, and
+  the body pitch goes from `BREAST_PITCH` to `CRAWL_PITCH`. Each clip is sought to a phase the
+  controller advances, so splashes land on hand entry (breaststroke: both hands at `BREAST_SPLASH`). Sitting (C) plays
   `sit_animations.res`: `down` (sought forwards, then backwards to stand up) and a seated
   `idle` loop. Picking up plays `pick_animations.res` (`up`; the right hand reaches `GRAB` in
   `pick_clips.py`, which must match `PICK_REACH`). Throwing (`hotbar.gd` calls `player.throw`)

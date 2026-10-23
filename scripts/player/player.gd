@@ -3,7 +3,8 @@ extends CharacterBody3D
 ## Third-person character controller in the style of GTA V: an over-the-shoulder
 ## orbit camera, movement relative to the camera, the character turning to face where
 ## it moves, and walk / jog / sprint animations blended by speed. V toggles first person.
-## In deep water the character swims: treading water when still, front crawl when moving.
+## In deep water the character swims: treading water when still, breaststroke when moving,
+## front crawl when sprinting.
 ## C sits down on the ground (and gets up again, as does moving or jumping). Picking
 ## something up (pick_up, from pickups.gd) walks to it, bends down and takes it in hand.
 
@@ -30,10 +31,11 @@ const ANIM_IDLE = "Human Armature|Idle"
 const ANIM_WALK = "Human Armature|Walk"
 const ANIM_RUN = "Human Armature|Run"
 const ANIM_JUMP = "Human Armature|Jump"
-## Swim clips (treading water, front crawl), authored for this skeleton; see tools/convert_anims.gd
+## Swim clips (treading water, breaststroke, front crawl), authored for this skeleton; see tools/convert_anims.gd
 const SWIM_ANIMS = preload("res://characters/human/swim_animations.res")
 const ANIM_TREAD = "swim/tread"
 const ANIM_CRAWL = "swim/crawl"
+const ANIM_BREAST = "swim/breast"
 ## Sitting on the ground: sit down (played backwards to stand up), then a seated loop
 const SIT_ANIMS = preload("res://characters/human/sit_animations.res")
 const ANIM_SIT_DOWN = "sit/down"
@@ -85,6 +87,8 @@ const SWIM_ENTER_DEPTH = 1.3   # Start swimming when the seabed is this far belo
 const SWIM_EXIT_DEPTH = 1.1    # Stand up again once it's shallower than this
 const FLOAT_DEPTH = 1.45       # How far below the surface the feet hang while swimming
 const CRAWL_PITCH = -1.35      # Body tilt (radians) when swimming flat out
+const BREAST_PITCH = -1.15     # Breaststroke rides a little more upright, head above the water
+const BREAST_SPLASH = 0.42     # Point in the breaststroke cycle where the hands shoot forward
 const SWIM_CAMERA_HEIGHT = 0.65  # Camera pivot above the water while swimming
 const SWIM_EYE_HEIGHT = 0.2
 
@@ -124,7 +128,9 @@ var last_step: Array[AudioStream] = [null, null]  # Per foot, to avoid immediate
 var feet: Array[AudioStreamPlayer3D] = []
 var swimming := false
 var swim_blend := 0.0   # 0 = on foot, 1 = fully in the swimming pose
-var crawl := 0.0        # 0 = treading water, 1 = front crawl
+var stroking := 0.0     # 0 = treading water, 1 = swimming a stroke
+var sprint_stroke := 0.0  # Which stroke: 0 = breaststroke, 1 = front crawl (sprint)
+var breast_phase := 0.0 # Position in the breaststroke cycle: pull, kick, glide
 var swim_time := 0.0
 var tread_phase := 0.0  # Position in the treading-water cycle (0..1)
 var stroke_phase := 0.0 # Position in the front-crawl cycle: left hand enters at 0, right at 0.5
@@ -392,31 +398,43 @@ func _update_swim_strokes(delta: float) -> void:
 	var swim_speed := Vector2(velocity.x, velocity.z).length()
 	var tread_length := SWIM_ANIMS.get_animation("tread").length
 	var crawl_length := SWIM_ANIMS.get_animation("crawl").length
+	var breast_length := SWIM_ANIMS.get_animation("breast").length
 	tread_phase = fposmod(tread_phase + delta / tread_length, 1.0)
-	# The clip's own pace (one cycle per crawl_length) is the stroke rate at SWIM_SPEED
+	# Each clip's own pace (one cycle per its length) is the stroke rate at SWIM_SPEED
+	var pace := lerpf(0.65, 1.0, swim_speed / SWIM_SPEED)
+	var crawling := sprint_stroke > 0.5
 	var before := floori(stroke_phase * 2.0)
-	stroke_phase += delta / crawl_length * lerpf(0.65, 1.0, swim_speed / SWIM_SPEED)
-	if floori(stroke_phase * 2.0) != before and crawl > 0.4 and swimming:
+	stroke_phase += delta / crawl_length * pace
+	if floori(stroke_phase * 2.0) != before and stroking > 0.4 and crawling and swimming:
 		# The left hand enters at the start of the cycle, the right halfway through
 		var left_hand := floori(stroke_phase * 2.0) % 2 == 0
 		_play_stroke_splash(swim_speed / SWIM_SPRINT_SPEED, left_hand)
 	stroke_phase = fposmod(stroke_phase, 1.0)
+	var breast_before := breast_phase
+	breast_phase = fposmod(breast_phase + delta / breast_length * pace, 1.0)
+	if breast_before < BREAST_SPLASH and breast_phase >= BREAST_SPLASH and stroking > 0.4 and not crawling and swimming:
+		_play_breast_splash(swim_speed / SWIM_SPEED)
 	anim_tree.set("parameters/tread_seek/seek_request", tread_phase * tread_length)
 	anim_tree.set("parameters/crawl_seek/seek_request", stroke_phase * crawl_length)
-	anim_tree.set("parameters/swim/blend_amount", crawl)
+	anim_tree.set("parameters/breast_seek/seek_request", breast_phase * breast_length)
+	anim_tree.set("parameters/swim/blend_amount", stroking)
+	anim_tree.set("parameters/stroke/blend_amount", sprint_stroke)
 
 
-## Tilts the body flat for the crawl, pivoting about the chest, not the feet.
+## Tilts the body for the stroke (flat for the crawl, a little less for breaststroke),
+## pivoting about the chest, not the feet.
 func _update_swim_pose(delta: float) -> void:
 	swim_blend = move_toward(swim_blend, 1.0 if swimming else 0.0, delta * 2.5)
-	var target_crawl := clampf(Vector2(velocity.x, velocity.z).length() / 1.2, 0.0, 1.0) if swimming else 0.0
-	crawl = lerpf(crawl, target_crawl, 1.0 - exp(-3.0 * delta))
+	var target_stroking := clampf(Vector2(velocity.x, velocity.z).length() / 1.2, 0.0, 1.0) if swimming else 0.0
+	stroking = lerpf(stroking, target_stroking, 1.0 - exp(-3.0 * delta))
+	var sprinting := swimming and Input.is_action_pressed("sprint")
+	sprint_stroke = move_toward(sprint_stroke, 1.0 if sprinting else 0.0, delta * 2.5)
 
-	var tilt := CRAWL_PITCH * crawl * swim_blend
+	var tilt := lerpf(BREAST_PITCH, CRAWL_PITCH, sprint_stroke) * stroking * swim_blend
 	model.rotation.x = tilt
 	# The model's pivot is at its feet; keep its middle (0.9 m up) on a point that
 	# rises to just under the waterline as the body goes flat
-	var middle := Vector3(0.0, lerpf(0.9, FLOAT_DEPTH - 0.15, crawl * swim_blend), 0.0)
+	var middle := Vector3(0.0, lerpf(0.9, FLOAT_DEPTH - 0.15, stroking * swim_blend), 0.0)
 	model.position = middle - Basis.from_euler(Vector3(tilt, model.rotation.y, 0.0)) * Vector3(0.0, 0.9, 0.0)
 
 
@@ -431,6 +449,21 @@ func _play_stroke_splash(intensity: float, left_hand: bool) -> void:
 	foot.stream = stream
 	foot.pitch_scale = randf_range(1.05, 1.25)
 	foot.volume_db = linear_to_db(lerpf(0.3, 0.6, clampf(intensity, 0.0, 1.0)))
+	foot.play()
+
+
+## Breaststroke: one soft wash as both hands shoot forward, sprayed at each hand
+func _play_breast_splash(intensity: float) -> void:
+	_show_stroke_splash(intensity * 0.6, true)
+	_show_stroke_splash(intensity * 0.6, false)
+	var foot := feet[0]
+	var stream: AudioStream = WATER_STEPS.pick_random()
+	while stream == last_splash:
+		stream = WATER_STEPS.pick_random()
+	last_splash = stream
+	foot.stream = stream
+	foot.pitch_scale = randf_range(0.9, 1.0)
+	foot.volume_db = linear_to_db(lerpf(0.2, 0.4, clampf(intensity, 0.0, 1.0)))
 	foot.play()
 
 
@@ -758,7 +791,8 @@ func _floor_collider() -> Object:
 ## Builds the animation graph:
 ##   locomotion (blend space idle -> walk -> run by speed) -> time scale --\
 ##   jump clip (seekable) ------------------------------------------------> ground/air/swim transition
-##   tread / crawl clips (each sought to its phase), blended by speed --/
+##   tread / (breaststroke | crawl by sprint) clips, sought to their phases,
+##   blended by speed ---------------------------------------------------/
 ##   sit-down clip (sought, also backwards) / seated idle loop, blended -/
 ##   pick-up clip (sought) ----------------------------------------------/
 ## and over all of it, the throw clip (sought) on the upper body bones (upper_body filter).
@@ -796,6 +830,9 @@ func _build_animation_tree() -> AnimationTree:
 	graph.add_node("tread_seek", AnimationNodeTimeSeek.new())
 	graph.add_node("crawl", _clip(ANIM_CRAWL))
 	graph.add_node("crawl_seek", AnimationNodeTimeSeek.new())
+	graph.add_node("breast", _clip(ANIM_BREAST))
+	graph.add_node("breast_seek", AnimationNodeTimeSeek.new())
+	graph.add_node("stroke", AnimationNodeBlend2.new())
 	graph.add_node("swim", AnimationNodeBlend2.new())
 	graph.add_node("sit_down", _clip(ANIM_SIT_DOWN))
 	graph.add_node("sit_down_seek", AnimationNodeTimeSeek.new())
@@ -809,8 +846,11 @@ func _build_animation_tree() -> AnimationTree:
 	graph.connect_node("jump_seek", 0, "jump")
 	graph.connect_node("tread_seek", 0, "tread")
 	graph.connect_node("crawl_seek", 0, "crawl")
+	graph.connect_node("breast_seek", 0, "breast")
+	graph.connect_node("stroke", 0, "breast_seek")
+	graph.connect_node("stroke", 1, "crawl_seek")
 	graph.connect_node("swim", 0, "tread_seek")
-	graph.connect_node("swim", 1, "crawl_seek")
+	graph.connect_node("swim", 1, "stroke")
 	graph.connect_node("sit_down_seek", 0, "sit_down")
 	graph.connect_node("sit_idle_seek", 0, "sit_idle")
 	graph.connect_node("sit", 0, "sit_down_seek")

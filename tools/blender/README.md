@@ -8,7 +8,7 @@ blocks of the same names inside `player-swim.blend`. That file lives outside the
 |---|---|
 | `swim_tools.py` | Body frame (U, F, L), aim solver, Idle base pose, clip helpers |
 | `sit_clips.py` | Two-bone IK and posing helpers; SitDown, SitIdle |
-| `swim_clips.py` | SwimTread, SwimCrawl |
+| `swim_clips.py` | SwimTread, SwimCrawl, SwimBreast (breaststroke uses the `sit_clips.py` IK helpers) |
 | `pick_clips.py` | PickUp |
 | `throw_clips.py` | Throw (overhand, upper body) |
 

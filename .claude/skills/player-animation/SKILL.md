@@ -11,7 +11,7 @@ no third-party licence. (Mixamo clips aren't CC0; don't use them.)
 
 | Clip | Library (`characters/human/`) | Blender action / NLA track | Script |
 |---|---|---|---|
-| tread, crawl | `swim_animations.res` | SwimTread, SwimCrawl / `swim_tread`, `swim_crawl` | `swim_clips.py` |
+| tread, crawl, breast | `swim_animations.res` | SwimTread, SwimCrawl, SwimBreast / `swim_tread`, `swim_crawl`, `swim_breast` | `swim_clips.py` |
 | down, idle | `sit_animations.res` | SitDown, SitIdle / `sit_down`, `sit_idle` | `sit_clips.py` |
 | up | `pick_animations.res` | PickUp / `pick_up` | `pick_clips.py` |
 | overhand | `throw_animations.res` | Throw / `throw` | `throw_clips.py` |
@@ -59,6 +59,11 @@ Run code there with `mcp__blender__execute_blender_code`. Look at the result wit
   Solve the torso and `apply` it first, so `head("RightArm")` and similar return the real joint
   positions.
 - **Hips height:** key the Hips location through `apply`/`key` to lower or raise the body.
+
+- **Prone clips** (swimming): the game pitches the whole model forward, so in the upright clip
+  frame U is "ahead", F "down into the water" and −F "up to the sky". To preview one as the game
+  shows it, store `ARM.matrix_world`, pre-multiply `Matrix.Rotation(-pitch, 4, 'X')` (e.g. 1.15
+  for BREAST_PITCH −1.15), look, then **restore it exactly** before building or exporting.
 
 ## Authoring steps
 

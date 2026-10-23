@@ -17,6 +17,7 @@ const OUT = "res://characters/human/%s_animations.res"  # One file per library
 const CLIPS = {
 	"swim_tread": ["swim", "tread", true],
 	"swim_crawl": ["swim", "crawl", true],
+	"swim_breast": ["swim", "breast", true],
 	"sit_down": ["sit", "down", false],  # Played backwards to stand up
 	"sit_idle": ["sit", "idle", true],
 	"pick_up": ["pick", "up", false],
