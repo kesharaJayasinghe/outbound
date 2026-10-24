@@ -21,6 +21,7 @@ const HOTBAR = preload("res://scripts/player/hotbar.gd")
 const HIDDEN_SEABED_DEPTH = 24.0  # Seabed deeper than this (metres) is left out of the terrain mesh
 const WATERFALL_STEP = 3.0  # Water surface drop across one cell (metres) that counts as a waterfall
 const BUILDER = preload("res://scripts/build/builder.gd")
+const DAY_NIGHT = preload("res://scripts/world/day_night.gd")
 
 ## Load this baked island (see tools/bake_island.gd) instead of generating one.
 ## Clear it to generate from the settings below. Shape, Erosion and beach settings
@@ -70,6 +71,12 @@ const BUILDER = preload("res://scripts/build/builder.gd")
 @export_group("Wildlife")
 @export var birds_enabled: bool = true     ## Seabirds circling over the coasts, and gulls on the beaches
 
+@export_group("Day and Night")
+@export var day_night_cycle: bool = true   ## Let time pass (off: the clock stays at the start hour)
+@export_range(0.0, 24.0) var start_hour: float = 9.0
+@export_range(1.0, 120.0) var day_length_minutes: float = 24.0  ## Real minutes for a whole day, night included
+@export_range(1.0, 6.0) var night_speed: float = 2.0  ## Night hours pass this many times faster than day hours
+
 @export_group("Audio")
 @export var audio_enabled: bool = true
 
@@ -96,11 +103,19 @@ var islets: Array[Dictionary] = []       # {center (world X, Z), radius (metres)
 var caves: Array[Dictionary] = []        # Cave layouts (cave.gd), behind waterfalls that have one
 var terrain_material: ShaderMaterial
 var size := 0                          # Vertices per side
+var day_night: Node                    # day_night.gd: the clock, sun, moon and sky
 var rng := RandomNumberGenerator.new()
 
 
 func _ready() -> void:
 	var t := Time.get_ticks_msec()
+	day_night = DAY_NIGHT.new()
+	day_night.name = "DayNight"
+	add_child(day_night)
+	var world_env := get_node_or_null("WorldEnvironment") as WorldEnvironment
+	day_night.setup(get_node_or_null("DirectionalLight3D") as DirectionalLight3D,
+			world_env.environment if world_env else null, start_hour, day_length_minutes * 60.0,
+			night_speed, day_night_cycle)
 	if baked_island:
 		_load_baked(baked_island)
 	else:

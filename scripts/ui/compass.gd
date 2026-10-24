@@ -4,7 +4,7 @@ extends Control
 ## camera turns: ticks every 15°, N / E / S / W (N picked out) and the in-between points,
 ## with the exact bearing under the centre notch. Placed structures (shelter, radio) show as
 ## markers at their bearing, with how far away they are, in the map's colour. Bearings
-## match the map: 0° = north (-Z), 90° = east (+X).
+## match the map: 0° = north (-Z), 90° = east (+X). The time of day shows to the right.
 
 const MAP_VIEW = preload("res://scripts/ui/map_view.gd")
 
@@ -20,11 +20,13 @@ const MARKER_RANGE = 2000.0    # Don't show structures further away than this (m
 
 var player: Node3D
 var structures: Node3D
+var day_night: Node  # day_night.gd, for the clock (optional)
 
 
-func setup(player_node: Node3D, structures_node: Node3D) -> void:
+func setup(player_node: Node3D, structures_node: Node3D, clock: Node = null) -> void:
 	player = player_node
 	structures = structures_node
+	day_night = clock
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	set_anchors_and_offsets_preset(Control.PRESET_CENTER_TOP)
 	offset_left = -BAR_SIZE.x * 0.5
@@ -112,6 +114,9 @@ func _draw() -> void:
 			Vector2(BAR_SIZE.x * 0.5 + 6.0, BAR_SIZE.y + 7.0), Vector2(BAR_SIZE.x * 0.5, BAR_SIZE.y)])
 	draw_colored_polygon(notch, TEXT_COLOR)
 	_text(font, "%03d°" % (roundi(facing) % 360), Vector2(BAR_SIZE.x * 0.5, BAR_SIZE.y + 22.0), 12, Color(1, 1, 1, 0.8))
+
+	if day_night:
+		_text(font, day_night.clock(), Vector2(BAR_SIZE.x + 36.0, mid + 5.0), 14, Color(1, 1, 1, 0.85))
 
 
 ## Text centred on x, with its baseline at y, and a drop shadow like the other HUD labels

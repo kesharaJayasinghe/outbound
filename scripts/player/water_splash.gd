@@ -5,6 +5,7 @@ extends Node3D
 ## water surface and fades. A fixed pool of emitters and rings is reused oldest-first,
 ## so nothing is allocated while playing; idle ones are hidden.
 
+const DAY_NIGHT = preload("res://scripts/world/day_night.gd")
 const POOL_SIZE = 8           # Sprinting through water makes about three steps a second
 const DROPLETS = 48           # Per splash at full strength
 const DROPLET_LIFETIME = 0.8
@@ -136,6 +137,7 @@ func _droplet_mesh() -> QuadMesh:
 	mat.vertex_color_use_as_albedo = true
 	mat.albedo_color = Color(0.93, 0.96, 1.0, 0.75)
 	mat.albedo_texture = _soft_dot()
+	DAY_NIGHT.dim_at_night(mat)
 	var quad := QuadMesh.new()
 	quad.size = Vector2(0.042, 0.042)
 	quad.material = mat

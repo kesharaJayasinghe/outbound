@@ -3,7 +3,7 @@ extends Node
 ## Ambient soundscape that follows the player around the island:
 ## - surf from the nearest stretch of shoreline (positional, so it has direction)
 ## - distant, muffled sea: near the coast and from high up, fading out deep inland
-## - birdsong in the forest, thinning out on open ground and high up
+## - birdsong in the forest, thinning out on open ground and high up, and quiet at night
 ## - wind that picks up with altitude and on exposed ground
 ## - a babbling river from the nearest flowing stretch, and rushing water near rapids
 
@@ -171,7 +171,8 @@ func _process(delta: float) -> void:
 	_follow(river, river_target, river_points, -2.0, delta)
 	_follow(rapids, rapid_target, rapid_points, 0.0, delta)
 
-	_fade(birds, lerpf(0.2, 1.0, forest) * (1.0 - smoothstep(0.45, 0.8, altitude)), delta)
+	var dark: float = gen.day_night.night if gen.day_night else 0.0
+	_fade(birds, lerpf(0.2, 1.0, forest) * (1.0 - smoothstep(0.45, 0.8, altitude)) * (1.0 - 0.9 * dark), delta)
 	_fade(wind, (0.2 + 0.8 * smoothstep(0.1, 0.7, altitude)) * (1.0 - 0.35 * forest) * 0.8, delta)
 
 

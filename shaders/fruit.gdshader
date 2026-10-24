@@ -5,9 +5,11 @@ render_mode world_vertex_coords, diffuse_burley, specular_schlick_ggx, cull_disa
 // (proc_mesh.gd). COLOR is the colour, painted per vertex (ripeness, a mango's blush,
 // the stalks). UV2.x is the sway weight, matching the plant it hangs on so it stays on.
 // Glossy skin, with a little light glowing through it, and a faint glow of its own so it
-// still reads in the shade of a canopy. Two-sided for the thin stalks.
+// still reads in the shade of a canopy (by day: it follows `daylight`). Two-sided for the thin stalks.
 
 #include "res://shaders/wind.gdshaderinc"
+
+global uniform vec3 daylight;  // day_night.gd: the glow fades at night
 
 void vertex() {
 	VERTEX += wind_offset(MODEL_MATRIX[3].xyz, UV2.x, TIME);
@@ -16,7 +18,7 @@ void vertex() {
 void fragment() {
 	ALBEDO = COLOR.rgb;
 	BACKLIGHT = COLOR.rgb * 0.3;
-	EMISSION = COLOR.rgb * 0.12;
+	EMISSION = COLOR.rgb * 0.12 * daylight;
 	ROUGHNESS = 0.35;
 	SPECULAR = 0.5;
 }

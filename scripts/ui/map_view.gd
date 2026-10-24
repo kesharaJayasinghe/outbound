@@ -3,7 +3,7 @@ extends CanvasLayer
 ## Full-screen island map, opened from the interaction menu. The map itself is drawn
 ## by shaders/map.gdshader from the terrain data; on top are the player (an arrow
 ## pointing where the camera faces) and placed structures. The game pauses while it's
-## open. Below the map: the player's coordinates and the compass bearing they face.
+## open. Below the map: the player's coordinates, the compass bearing they face and the time.
 ## It opens framed on the land (all the islands); scroll (mouse wheel or trackpad)
 ## zooms in around the player. M, Esc or right-click closes it.
 
@@ -153,6 +153,8 @@ func _update_view() -> void:
 	var bearing := _bearing()
 	position_label.text = "X %d   Z %d   Elevation %d m      Bearing %03d° %s" % [
 			roundi(p.x), roundi(p.z), roundi(p.y), roundi(bearing) % 360, COMPASS[roundi(bearing / 45.0) % 8]]
+	if gen.day_night:
+		position_label.text += "      %s" % gen.day_night.clock()
 
 
 ## Compass bearing the camera faces, in degrees: 0 = north (-Z), 90 = east (+X)

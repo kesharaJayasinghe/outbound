@@ -27,6 +27,11 @@ island with eroded mountains, beaches, jungle, wildlife ambience and a swimmable
   straight at the waterfall.
 - **Sky**: a sky gradient with soft fair-weather clouds that drift slowly with the wind and
   catch the light around the sun.
+- **Day and night**: a full day takes 24 real minutes (about 16 of daylight, 8 of night;
+  night hours pass twice as fast). The sun rises in the east, passes almost overhead and
+  sets in the west, with warm sunrises and sunsets. At night the moon rises, the stars come
+  out, the clouds go dark and the birdsong stops. The time shows beside the compass and on
+  the map. Day length, start time and night speed are in the Inspector (Day and Night).
 - **Vegetation**: coconut palms on the shore, rainforest trees, big-leaf undergrowth, scattered
   rocks and a dense GPU grass field around the player. Many of the beach palms carry bunches of
   green coconuts, with more lying in the sand underneath. Walk up to a fallen coconut and press
@@ -69,11 +74,11 @@ island with eroded mountains, beaches, jungle, wildlife ambience and a swimmable
   you, such as taking down a shelter you face, which refunds its cost. Nothing is on screen
   until you open it.
 - **Map**: a shaded map of the island with contour lines, rivers, your position and facing,
-  and your shelters, plus your coordinates, elevation and compass bearing. The game pauses
+  and your shelters, plus your coordinates, elevation, compass bearing and the time. The game pauses
   while it's open; scroll to zoom in around you.
 - **Compass**: a bar at the top of the screen shows the direction you're facing (N, NE, E…
   and the bearing in degrees), with markers for your shelters and radio and how far away
-  they are.
+  they are, and the time of day on the right.
 
 ## Running
 
@@ -146,6 +151,7 @@ These settings apply when generating or baking an island:
 | Islet | Toggle, whole-world grid size, islet centre, islet area (fraction of the main island's) |
 | Vegetation | Toggles for vegetation and grass; tree, bush and rock density |
 | Wildlife | Toggle for the seabirds (flying and on the beaches) |
+| Day and Night | Toggle for time passing, start hour, day length (real minutes), how much faster night hours pass |
 | Audio | Toggle for the ambient soundscape |
 
 Colours, wind and other visual parameters are shader uniforms on the materials in `shaders/`.

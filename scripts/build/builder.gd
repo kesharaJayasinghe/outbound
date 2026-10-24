@@ -96,7 +96,7 @@ func setup(generator: Node3D, player_node: CharacterBody3D) -> void:
 	var compass := COMPASS.new()
 	compass.name = "Compass"
 	hud.add_child(compass)
-	compass.setup(player, structures)
+	compass.setup(player, structures, gen.day_night)
 
 
 ## Default key (and controller button) for an input action, unless the project

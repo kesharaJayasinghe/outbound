@@ -5,10 +5,11 @@ extends SceneTree
 ##
 ## Usage (windowed, so shaders actually render):
 ##   godot --path . --audio-driver Dummy --resolution 1280x720 \
-##       --script res://tools/screenshot.gd -- --out=/tmp/shots [--seed=12345] [--views=player,overview,beach,peak]
+##       --script res://tools/screenshot.gd -- --out=/tmp/shots [--seed=12345] [--views=player,overview,beach,peak] [--hour=21.5]
 ##
 ## By default it shows the baked island the game loads. --seed generates that seed
-## instead (use it to preview generator changes before re-baking).
+## instead (use it to preview generator changes before re-baking). --hour stops the clock
+## at that time of day (default: the generator's start hour, with time passing).
 ##
 ## Views:
 ##   player    the player's own third-person camera
@@ -28,6 +29,7 @@ var view_index := 0
 
 func _initialize() -> void:
 	var seed_arg := 0
+	var hour_arg := -1.0
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--out="):
 			out_dir = arg.trim_prefix("--out=")
@@ -35,12 +37,17 @@ func _initialize() -> void:
 			seed_arg = int(arg.trim_prefix("--seed="))
 		elif arg.begins_with("--views="):
 			views = arg.trim_prefix("--views=").split(",")
+		elif arg.begins_with("--hour="):
+			hour_arg = float(arg.trim_prefix("--hour="))
 	DirAccess.make_dir_recursive_absolute(out_dir)
 
 	world = load(ProjectSettings.get_setting("application/run/main_scene")).instantiate()
 	if seed_arg != 0:
 		world.baked_island = null
 		world.terrain_seed = seed_arg
+	if hour_arg >= 0.0:
+		world.start_hour = hour_arg
+		world.day_night_cycle = false
 	root.add_child(world)
 	cam = Camera3D.new()
 	cam.far = 4000.0

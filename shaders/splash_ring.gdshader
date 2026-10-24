@@ -6,6 +6,7 @@ render_mode unshaded, blend_mix, depth_draw_never, cull_disabled, shadows_disabl
 // noise around the ring), with some churned water left in the middle.
 
 instance uniform float age = 1.0;
+global uniform vec3 daylight;  // day_night.gd: unshaded, so it darkens with the light by hand
 
 float hash(vec2 p) {
 	return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
@@ -30,6 +31,6 @@ void fragment() {
 	float ring = smoothstep(0.9 - width, 0.9 - width * 0.3, rr) * (1.0 - smoothstep(0.9, 0.98, rr));
 	ring *= smoothstep(0.25 + age * 0.4, 0.75, n);  // Breaks into patches as it spreads
 	float centre = (1.0 - smoothstep(0.0, 0.65, r)) * smoothstep(0.35, 0.8, n) * 0.3 * (1.0 - age);
-	ALBEDO = vec3(0.92, 0.96, 1.0);
+	ALBEDO = vec3(0.92, 0.96, 1.0) * daylight;
 	ALPHA = clamp(ring * 0.6 + centre, 0.0, 1.0) * (1.0 - age);
 }

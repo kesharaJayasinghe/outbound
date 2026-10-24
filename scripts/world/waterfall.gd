@@ -4,6 +4,7 @@ extends Node3D
 ## leaves the lip and arcs down into the plunge pool, churning foam where it lands,
 ## drifting mist, and the roar of the falls.
 
+const DAY_NIGHT = preload("res://scripts/world/day_night.gd")
 const SHEET_SHADER = preload("res://shaders/waterfall.gdshader")
 const FOAM_SHADER = preload("res://shaders/waterfall_foam.gdshader")
 const ROAR = preload("res://audio/river_rush.wav")
@@ -159,6 +160,7 @@ func _mist(landing: Vector3, width: float) -> GPUParticles3D:
 	mat.albedo_texture = puff_tex
 	mat.proximity_fade_enabled = true
 	mat.proximity_fade_distance = 1.5
+	DAY_NIGHT.dim_at_night(mat)
 	var quad := QuadMesh.new()
 	quad.size = Vector2.ONE * 5.5
 	quad.material = mat

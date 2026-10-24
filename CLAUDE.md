@@ -60,7 +60,7 @@ the middle) and adds the islet (`_add_islet`):
 4. `_build_terrain`: mesh with analytic normals (`normal_map`) + `HeightMapShape3D`
    collision (uniformly scaled by `cell_size`). Cells deeper than `HIDDEN_SEABED_DEPTH`
    get no triangles (the sea is opaque there), which keeps the big open-sea grid cheap.
-5. `_build_water`, `_place_player`, then `vegetation.gd` (`build(gen)`),
+5. (`day_night.gd` is set up first, at the start of `_ready`.) `_build_water`, `_place_player`, then `vegetation.gd` (`build(gen)`),
    `ambient_audio.gd` (`setup(gen, vegetation)`) and `build/builder.gd` (`setup(gen, player)`).
 
 `tools/bake_island.gd` runs `generate()` and writes the EXRs and the `.tres`, including the RNG
@@ -190,13 +190,26 @@ particles, and the river-rush loop pitched down as the roar).
   boost to carry over the surf.
 - `shaders/sky.gdshader`: the sky (the scene's Sky material). It reproduces
   ProceduralSkyMaterial's gradient and sun, plus 2D fBm clouds projected onto a flat layer
-  (no ray marching). The cloud drift is the global shader parameter `cloud_time`
-  (`project.godot` `[shader_globals]`), set by `world_generator.gd` `_process`. Don't use
-  TIME in the sky shader: it makes Godot re-render the radiance cubemap every frame, about
-  three times the cost (≈0.6 ms vs 0.2 ms on an M1 Pro at 720p).
+  (no ray marching), stars and the moon. Things that move every frame come from global
+  shader parameters (`project.godot` `[shader_globals]`): `cloud_time` (set by
+  `world_generator.gd` `_process`), `sun_direction` and `moon_direction`. Don't use TIME or
+  the LIGHT0_* built-ins in the sky shader: either makes Godot re-render the radiance
+  cubemap every frame, about three times the cost (≈0.6 ms vs 0.2 ms on an M1 Pro at
+  720p). Global parameters don't trigger that; material uniforms do.
+- `day_night.gd` (`gen.day_night`): the clock (`hour`, `clock()`), sun and moon. A day
+  takes `day_length_minutes` (generator export), and night hours run `night_speed` times
+  faster. The scene's one DirectionalLight3D is the sun by day and the moon by night,
+  swapping while both are low at dusk and dawn (one shadow-casting light). Moonlight is
+  faked to come from at least `MOON_LIGHT_MIN_HEIGHT`, and a flat `NIGHT_AMBIENT` mixes in,
+  so nights stay playable. Colours come from palettes keyed by the sun's height; the sky's
+  material uniforms are set only every `SKY_UPDATE` s (each set re-renders the cubemap).
+  `night` (0..1) is for other systems (ambient_audio.gd fades the birdsong). Unshaded
+  materials don't darken at night by themselves: call `DAY_NIGHT.dim_at_night(material)`
+  for a StandardMaterial3D, or read `global uniform vec3 daylight` in a shader (fruit glow,
+  splash rings). `tools/screenshot.gd --hour=21` captures a fixed time of day.
 - `scripts/ui/compass.gd`: the compass bar at the top centre (a Control on the builder's HUD,
   drawn in `_draw` every frame). Bearings match the map (0° = north = -Z). Placed structures
-  show as markers with their distance.
+  show as markers with their distance; the clock is on the right.
 - `scripts/ui/map_view.gd`: the map (opened from the interaction menu). Packs heights, the
   inland mask and water heights into a float texture for `shaders/map.gdshader`, which does
   the colouring, hill shading and contours; markers are drawn on a Control on top. It pauses
