@@ -320,18 +320,18 @@ func _alarm(at: Vector3) -> void:
 func _pose(k: int, b: Dictionary, _delta: float) -> void:
 	var heading: Vector3 = b.heading
 	var pos: Vector3 = b.pos
-	var basis: Basis
+	var facing: Basis
 	if b.state < State.TAKE_OFF:
 		# Standing: level, bobbing a little as it walks, dipping the head to peck
 		pos.y += STAND_HEIGHT + absf(sin(time * 11.0 + b.phase * TAU)) * 0.025 * b.walk
-		basis = Basis.looking_at(heading, Vector3.UP)
-		basis = basis.rotated(basis.x.normalized(), -0.5 * b.peck)
+		facing = Basis.looking_at(heading, Vector3.UP)
+		facing = facing.rotated(facing.x.normalized(), -0.5 * b.peck)
 	else:
 		# Flying: nose along the path, banked into turns
 		var velocity: Vector3 = heading * b.speed
 		var left := Vector3.UP.cross(heading)
 		var bank: float = clampf(b.turn * b.speed / 9.8 * 1.5, -0.8, 0.8)
-		basis = Basis.looking_at(velocity.normalized() if velocity.length() > 0.1 else heading, (Vector3.UP + left * tan(bank)).normalized())
-	multimesh.set_instance_transform(k, Transform3D(basis.scaled(Vector3.ONE * SIZE), pos))
+		facing = Basis.looking_at(velocity.normalized() if velocity.length() > 0.1 else heading, (Vector3.UP + left * tan(bank)).normalized())
+	multimesh.set_instance_transform(k, Transform3D(facing.scaled(Vector3.ONE * SIZE), pos))
 	var on_ground: bool = b.state < State.TAKE_OFF
 	multimesh.set_instance_custom_data(k, Color(b.phase, b.flap, b.walk if on_ground else 1.0, b.perched))
