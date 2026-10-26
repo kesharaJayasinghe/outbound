@@ -65,6 +65,9 @@ island with eroded mountains, beaches, jungle, wildlife ambience and a swimmable
 - **Splashes**: running or wading through shallow water kicks up spray and leaves spreading
   foam rings; jumping in makes a bigger splash, and each front-crawl stroke splashes where the
   hand goes in (breaststroke washes forward with both hands).
+- **Torch**: craft one from the Craft page (it goes on your hotbar), then press its key to
+  carry it. Its flickering flame lights the way at night and throws shadows through the
+  trees, with sparks drifting up and a soft crackle. It's put out of sight while you swim.
 - **Crafting and building**: craft a palm-frond lean-to shelter and place it anywhere dry and
   level enough. A preview shows green where it fits and red where it doesn't. On a slope the
   downhill posts stretch to reach the ground. Gathering isn't in yet, so building is free for
@@ -101,7 +104,7 @@ The island loads from the baked files in `world/`, so startup is quick.
 | V | Toggle first / third person |
 | C | Sit down on the ground / get up (moving or jumping also gets up) |
 | E | Pick up / gather (when a prompt shows) |
-| 1–6 | Hotbar: hold that slot's item; the same key again puts it away |
+| 1–6 | Hotbar: hold that slot's item (stones, the torch); the same key again puts it away |
 | Click | Throw a stone (while holding stones) |
 | M | Interaction menu: scroll (mouse wheel or two-finger trackpad) selects, click confirms, right-click goes back |
 | Click / Right-click | Build / back to the menu, while placing |
@@ -179,7 +182,7 @@ All third-party assets are **CC0 / public domain**:
 - Character: "Animated Human" by [Quaternius](https://quaternius.com)
   ([OpenGameArt](https://opengameart.org/content/animated-human-low-poly))
 - Sounds from OpenGameArt by RandomMind, Spring Spring, Fantozzi, rubberduck, Peludo,
-  Independent.nu, Rango Mango and Wolfgang_, including the river loops, cave drips and gull calls,
+  Independent.nu, Rango Mango, Wolfgang_ and PagDev, including the river loops, cave drips and gull calls,
   and from Freesound by felix.blume, mycompasstv, gfrog, dandman3039 and Patrick Corrà
   (the night jungle, frogs and owls).
   Full details are in [`audio/CREDITS.txt`](audio/CREDITS.txt).

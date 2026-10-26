@@ -149,6 +149,14 @@ particles, and the river-rush loop pitched down as the roar).
   a `RightHand` BoneAttachment3D; when it's put away it goes into `player.inventory`. It grows back after
   `REGROW_TIME` when the player is out of sight range. The prompt and toast use the builder's
   HUD. The builder's menu has an Inventory page.
+- `player/torch.gd`: the hand-held torch (crafted: an `item` recipe in recipes.gd goes into the
+  inventory instead of being placed, with `limit` as how many you can carry). hotbar.gd
+  holds it upright at the palm, leaning `TORCH_LEAN` forward along the model's facing (the
+  `model` child turns, not the body), hidden while swimming or picking up. Flame and embers
+  are world-space additive particles; an OmniLight3D with dual-paraboloid shadows (cube
+  shadows cost 4-5 ms in the forest, these about 1 ms) whose `light_cull_mask` skips the
+  torch's own meshes (`OWN_LAYER`); a crackle on `SFX`. StandardMaterial3D's
+  `emission_texture` is added to the emission colour unless `emission_operator` is MULTIPLY.
 - `player/hotbar.gd`: six slots filled automatically from the inventory with EQUIPPABLE ids.
   Keys 1–6 select, and the same key again holsters. The held item is drawn at `player.hand`
   as a top-level node, because the hand bone carries the model's 0.338 scale. Clicking throws a

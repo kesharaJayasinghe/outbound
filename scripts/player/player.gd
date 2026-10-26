@@ -551,6 +551,11 @@ func is_busy() -> bool:
 	return swimming or sit != Sit.NONE or pick != Pick.NONE or not is_on_floor()
 
 
+## True while walking over to something to pick up, or picking it up
+func is_picking() -> bool:
+	return pick != Pick.NONE
+
+
 ## Walks over to the item lying at `item`, bends down and picks it up, drawing `mesh` in the
 ## right hand from the grab. Calls `on_grab` when it leaves the ground and `on_done` when
 ## it's put away. Returns false (doing nothing) if the player is busy. Moving cancels the

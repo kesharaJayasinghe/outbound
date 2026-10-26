@@ -89,3 +89,9 @@ night/owl_4.wav, night/owl_5.wav
   https://freesound.org/people/Patrick_Corra/sounds/745208/
   Single calls cut from the HQ previews, band-passed (180 Hz to 1.8-2.5 kHz) to drop the
   background noise, short fades, converted to mono, loudness-normalised.
+
+fire/torch_fire.wav
+  "Wood-Burning on Fireplace Sound Effect loop" by PagDev (CC0; credit appreciated)
+  https://opengameart.org/content/fireplace-sound-loop
+  Converted to mono 32 kHz, high-passed at 220 Hz (a torch, not a fireplace), loudness-
+  normalised, seam cross-faded.

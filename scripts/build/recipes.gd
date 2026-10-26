@@ -1,7 +1,9 @@
 extends RefCounted
 
 ## Everything the player can craft and place. A recipe's `cost` maps resource ids to
-## amounts; the ids are the ones the inventory counts (see inventory.gd).
+## amounts; the ids are the ones the inventory counts (see inventory.gd). A recipe with
+## `item` isn't placed: crafting it puts one in the inventory (its id), and `limit` is then
+## how many the player can carry.
 
 const RESOURCE_NAMES := {
 	&"wood": "Wood",
@@ -12,6 +14,7 @@ const RESOURCE_NAMES := {
 	&"berries": "Berries",
 	&"mango": "Mangoes",
 	&"orange": "Oranges",
+	&"torch": "Torch",
 }
 
 const RECIPES := [
@@ -41,6 +44,14 @@ const RECIPES := [
 		"max_slope": deg_to_rad(30.0),
 		## Grass is trimmed this far around it (metres), or it would hide in it
 		"grass_clearing": 0.7,
+	},
+	{
+		"id": &"torch",
+		"name": "Torch",
+		"item": true,
+		"cost": {&"wood": 1, &"fibre": 2, &"coconut": 1},
+		"limit": 1,
+		"about": "A stick wrapped in coconut husk fibre, set alight. Hold it from the hotbar to light your way at night.",
 	},
 ]
 

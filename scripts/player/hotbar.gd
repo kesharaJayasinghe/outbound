@@ -1,7 +1,7 @@
 extends Node
 
 ## The player's hotbar: six slots (keys 1-6) that fill up by themselves as equippable
-## things are gathered (stones, for now). Press a slot's key to hold what's in it; press
+## things are gathered or crafted (stones, the torch). Press a slot's key to hold what's in it; press
 ## it again to put it away (empty-handed). The bar shows for a moment when something
 ## changes, then fades; while something's held, a small reminder stays in the corner.
 ##
@@ -9,12 +9,17 @@ extends Node
 ## turns and throws overhand (player.throw), and the stone leaves the hand in a slight arc: a stone that passes a fruit bunch (coconuts, mangoes, oranges) knocks it down (pickups.gd), and one
 ## that lands near gulls on a beach sends them off (beach_birds.gd). Thrown stones are
 ## small rigid bodies that disappear a few seconds after landing.
+##
+## A held torch (torch.gd) is carried upright beside the body at the right hand, leaning a
+## little forward. It's put out of sight while swimming or picking something up, and comes
+## back (lit) afterwards.
 
 const BUILDER = preload("res://scripts/build/builder.gd")
 const RECIPES = preload("res://scripts/build/recipes.gd")
+const TORCH = preload("res://scripts/player/torch.gd")
 
 const SLOTS = 6
-const EQUIPPABLE: Array[StringName] = [&"stone"]
+const EQUIPPABLE: Array[StringName] = [&"stone", &"torch"]
 const THROWABLE: Array[StringName] = [&"stone"]  # Shows the aiming dot while held
 const SHOW_TIME = 2.5          # Seconds the bar stays up after a change
 const FADE_TIME = 0.6
@@ -27,6 +32,7 @@ const STONE_LIFETIME = 6.0     # Seconds a thrown stone lasts
 const STONE_SIZE = 0.12        # Metres
 const SPOOK_RADIUS = 7.0       # A stone landing this close to beach gulls sends them off
 const HELD_OFFSET = Vector3(0.0, 0.08, 0.03)  # From the hand bone to the palm (metres, bone axes)
+const TORCH_LEAN = 0.35        # How far forward a held torch leans (forward per metre up)
 
 var gen: Node3D
 var player: CharacterBody3D
@@ -39,6 +45,7 @@ var stone_mesh: Mesh
 var slots: Array[StringName] = []
 var selected := -1             # -1: empty-handed
 var held: MeshInstance3D       # What's drawn in the hand
+var torch: Node3D              # The torch, while it's held (torch.gd)
 var cooldown := 0.0
 var released := false          # This throw's stone has left the hand (hide it until the next)
 var thrown: Array[Dictionary] = []   # {body, age, landed}
@@ -74,6 +81,11 @@ func setup(generator: Node3D, player_node: CharacterBody3D, builder_node: Node, 
 	held.top_level = true
 	held.visible = false
 	player.hand.add_child(held)
+	torch = TORCH.new()
+	torch.name = "HeldTorch"
+	torch.top_level = true
+	torch.visible = false
+	player.hand.add_child(torch)
 	_build_hud()
 	_on_inventory_changed()
 
@@ -211,6 +223,15 @@ func _process(delta: float) -> void:
 		var hand: Node3D = player.hand
 		var axes := hand.global_basis.orthonormalized()
 		held.global_transform = Transform3D(axes.scaled(Vector3.ONE * STONE_SIZE), hand.global_position + axes * HELD_OFFSET)
+	torch.set_shown(_holding() == &"torch" and not player.swimming and not player.is_picking())
+	if torch.visible:
+		# Upright in the fist, leaning forward a little, whatever the arm is doing
+		var hand: Node3D = player.hand
+		var axes := hand.global_basis.orthonormalized()
+		var forward: Vector3 = -player.model.global_basis.z  # The model turns, not the body
+		var up := (Vector3.UP + Vector3(forward.x, 0.0, forward.z).normalized() * TORCH_LEAN).normalized()
+		var side := up.cross(forward).normalized()
+		torch.global_transform = Transform3D(Basis(side, up, side.cross(up)), hand.global_position + axes * HELD_OFFSET)
 	bar_timer -= delta
 	var target := 1.0 if bar_timer > 0.0 else 0.0
 	bar_alpha = move_toward(bar_alpha, target, delta / FADE_TIME)

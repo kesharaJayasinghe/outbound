@@ -233,6 +233,13 @@ func _choose(r: Dictionary) -> void:
 	if not inventory.can_afford(r.cost):
 		_toast("Not enough resources for the %s" % r.name.to_lower())
 		return
+	if r.get("item", false):
+		# Carried, not placed: straight into the inventory (and so onto the hotbar)
+		inventory.spend(r.cost)
+		inventory.add(r.id, 1)
+		_set_mode(Mode.IDLE)
+		_toast("Crafted a %s. It's on your hotbar." % r.name.to_lower())
+		return
 	recipe = r
 	rotation_offset = 0.0
 	ghost = r.scene.instantiate()
@@ -467,7 +474,7 @@ func _open_menu(page: StringName, index := 0) -> void:
 			for r: Dictionary in RECIPES.RECIPES:
 				var detail: String = r.get("about", RECIPES.describe_cost(r.cost))
 				if _at_limit(r):
-					detail = "You only have one. Pick it up to move it."
+					detail = "You already have one." if r.get("item", false) else "You only have one. Pick it up to move it."
 				elif inventory.free_build and not r.cost.is_empty():
 					detail += "\nFree build: resources aren't needed yet."
 				menu_items.append({"label": r.name, "detail": detail, "action": _choose.bind(r),
@@ -553,6 +560,8 @@ func _update_grass_clearings() -> void:
 func _at_limit(r: Dictionary) -> bool:
 	if not r.has("limit"):
 		return false
+	if r.get("item", false):
+		return inventory.count(r.id) >= r.limit
 	var placed := 0
 	for building: Node3D in structures.get_children():
 		if not building.is_queued_for_deletion() and building.get_meta(&"recipe", &"") == r.id:
