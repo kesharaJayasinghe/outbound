@@ -60,3 +60,32 @@ birds/gull_1-7.wav
 radio/tuning.wav
   Generated with ffmpeg (band-passed pink noise and a wobbling whistle): the static
   between stations.
+
+night/night_jungle.wav
+  "Night Frogs and Crickets - Rorota Trail, French Guiana" by felix.blume (Freesound, CC0)
+  https://freesound.org/people/felix.blume/sounds/868987/
+  A 63 s excerpt (from 1:30) of the HQ preview, converted to mono 32 kHz, made into a
+  seamless loop and brought up to about -23 LUFS (gain plus a limiter).
+
+night/crickets.wav
+  "Crickets Ambient Noise - loopable" by Wolfgang_ (attribution field: Ted Kerr), CC0
+  https://opengameart.org/content/crickets-ambient-noise-loopable
+  Converted to mono 32 kHz, seam cross-faded, brought up to about -22 LUFS (gain plus a limiter).
+
+night/frogs.wav
+  "Frogs croaking & crickets at night in jungle swamp Africa" by mycompasstv (Freesound, CC0)
+  https://freesound.org/people/mycompasstv/sounds/462889/
+  A 44 s excerpt of the HQ preview, converted to mono 32 kHz, loudness-normalised and made
+  into a seamless loop.
+
+night/owl_1.wav
+  "Owl in Arkansas Backyard 01" by gfrog (Freesound, CC0)
+  https://freesound.org/people/gfrog/sounds/157870/
+night/owl_2.wav, night/owl_3.wav
+  "Owl Slow Hoot" by dandman3039 (Freesound, CC0)
+  https://freesound.org/people/dandman3039/sounds/528623/
+night/owl_4.wav, night/owl_5.wav
+  "Tawny owl hooting" by Patrick_Corra (Freesound, CC0; credit requested as "Patrick Corrà")
+  https://freesound.org/people/Patrick_Corra/sounds/745208/
+  Single calls cut from the HQ previews, band-passed (180 Hz to 1.8-2.5 kHz) to drop the
+  background noise, short fades, converted to mono, loudness-normalised.

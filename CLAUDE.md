@@ -203,7 +203,10 @@ particles, and the river-rush loop pitched down as the roar).
   faked to come from at least `MOON_LIGHT_MIN_HEIGHT`, and a flat `NIGHT_AMBIENT` mixes in,
   so nights stay playable. Colours come from palettes keyed by the sun's height; the sky's
   material uniforms are set only every `SKY_UPDATE` s (each set re-renders the cubemap).
-  `night` (0..1) is for other systems (ambient_audio.gd fades the birdsong). Unshaded
+  `night` (0..1) is for other systems: ambient_audio.gd swaps the birdsong for the night
+  sounds (`audio/night/`: a jungle bed weighted by forest, crickets in the open, a frog
+  emitter on the nearest `wet_points` lake/river vertex, and owl one-shots placed in forest
+  30–85 m from the player, sometimes answered). Unshaded
   materials don't darken at night by themselves: call `DAY_NIGHT.dim_at_night(material)`
   for a StandardMaterial3D, or read `global uniform vec3 daylight` in a shader (fruit glow,
   splash rings). `tools/screenshot.gd --hour=21` captures a fixed time of day.

@@ -73,7 +73,7 @@ const DAY_NIGHT = preload("res://scripts/world/day_night.gd")
 
 @export_group("Day and Night")
 @export var day_night_cycle: bool = true   ## Let time pass (off: the clock stays at the start hour)
-@export_range(0.0, 24.0) var start_hour: float = 9.0
+@export_range(0.0, 24.0) var start_hour: float = 20.0
 @export_range(1.0, 120.0) var day_length_minutes: float = 24.0  ## Real minutes for a whole day, night included
 @export_range(1.0, 6.0) var night_speed: float = 2.0  ## Night hours pass this many times faster than day hours
 
