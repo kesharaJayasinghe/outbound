@@ -15,6 +15,7 @@ no third-party licence. (Mixamo clips aren't CC0; don't use them.)
 | down, idle | `sit_animations.res` | SitDown, SitIdle / `sit_down`, `sit_idle` | `sit_clips.py` |
 | up | `pick_animations.res` | PickUp / `pick_up` | `pick_clips.py` |
 | overhand | `throw_animations.res` | Throw / `throw` | `throw_clips.py` |
+| torch | `carry_animations.res` | CarryTorch / `carry_torch` (a still pose, right arm only) | `carry_clips.py` |
 
 ## The Blender file
 
@@ -121,6 +122,11 @@ Follow the swim, sit and pick code:
   They go through the filtered `upper_body` Blend2 after the state machine: its filter takes
   the bones whose names contain an entry of `UPPER_BODY`. Key the clip's hips and legs
   neutral.
+- **One parent per clip node:** an `AnimationNodeAnimation` connected to two blends breaks the
+  pose (the torch arm dropped to the hip). Give each blend its own clip node.
+- **Bones missing from a clip:** the glb export drops tracks that equal the rest pose, so a
+  filter can name a bone the clip lacks. The blend then pulls that bone towards rest (that's
+  how `carry_chest` steadies the chest).
 - **Holding things:** to hold an item, use the `RightHand` `BoneAttachment3D` (`hand`). Place
   the item at its world transform, then `reparent(hand, true)`.
 

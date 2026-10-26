@@ -22,6 +22,7 @@ const CLIPS = {
 	"sit_idle": ["sit", "idle", true],
 	"pick_up": ["pick", "up", false],
 	"throw": ["throw", "overhand", false],
+	"carry_torch": ["carry", "torch", true],  # A held pose for the right arm
 }
 const ROOT_BONE = "Hips"
 

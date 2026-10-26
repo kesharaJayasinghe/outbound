@@ -50,6 +50,13 @@ const THROW_RELEASE = 0.42     # Fraction of the clip where the hand lets go (RE
 const THROW_FACE_UNTIL = 0.75  # Keep facing the throw until this far through
 const THROW_TURN_SPEED = 18.0  # Snappier than TURN_SPEED: the wind-up turns towards the target
 const UPPER_BODY = ["Spine", "Neck", "Head", "Shoulder", "Arm", "Hand"]  # Bones the throw drives (name contains)
+## Holding a torch up: a still pose for the right arm, over whatever the rest of the body does
+const CARRY_ANIMS = preload("res://characters/human/carry_animations.res")
+const ANIM_CARRY_TORCH = "carry/torch"
+const CARRY_ARM = ["RightShoulder", "RightArm", "RightForeArm", "RightHand"]  # Bones it drives (name starts with)
+const CARRY_BLEND_TIME = 0.25  # Seconds to raise or lower the arm
+const CARRY_CHEST = ["Spine1", "Spine2"]  # Steadied while carrying: the run twists the chest
+const CARRY_CHEST_STEADY = 0.6  # How much of that twist (and lean) to take out
 
 # Footsteps: each set lists its left-foot sounds first, then the same number of right-foot sounds
 const SOFT_STEPS = [
@@ -152,6 +159,8 @@ var pick_on_done: Callable    # Called as it's put away
 var held: MeshInstance3D      # The item while it's in the hand
 var hand: BoneAttachment3D
 var skeleton: Skeleton3D
+var carry_torch := false    ## Set by hotbar.gd while a torch is held: raises the right arm
+var carry_weight := 0.0
 var throw_time := -1.0        # Seconds into the throw clip; -1 when not throwing
 var throw_dir := Vector3.ZERO
 var throw_on_release: Callable
@@ -309,6 +318,9 @@ func _process(delta: float) -> void:
 		_update_pick_animation(delta)
 	if is_throwing():
 		_update_throw_animation(delta)
+	carry_weight = move_toward(carry_weight, 1.0 if carry_torch else 0.0, delta / CARRY_BLEND_TIME)
+	anim_tree.set("parameters/carry/blend_amount", carry_weight)
+	anim_tree.set("parameters/carry_chest/blend_amount", carry_weight * CARRY_CHEST_STEADY)
 
 
 func _apply_view_mode() -> void:
@@ -800,13 +812,15 @@ func _floor_collider() -> Object:
 ##   blended by speed ---------------------------------------------------/
 ##   sit-down clip (sought, also backwards) / seated idle loop, blended -/
 ##   pick-up clip (sought) ----------------------------------------------/
-## and over all of it, the throw clip (sought) on the upper body bones (upper_body filter).
+## then the torch-carrying pose on the right arm (carry filter), and over all of it, the throw
+## clip (sought) on the upper body bones (upper_body filter).
 func _build_animation_tree() -> AnimationTree:
 	var player: AnimationPlayer = model.find_child("AnimationPlayer", true, false)
 	player.add_animation_library("swim", SWIM_ANIMS)
 	player.add_animation_library("sit", SIT_ANIMS)
 	player.add_animation_library("pick", PICK_ANIMS)
 	player.add_animation_library("throw", THROW_ANIMS)
+	player.add_animation_library("carry", CARRY_ANIMS)
 	for anim_name in [ANIM_IDLE, ANIM_WALK, ANIM_RUN]:
 		player.get_animation(anim_name).loop_mode = Animation.LOOP_LINEAR
 	_flatten_jump_hips(player.get_animation(ANIM_JUMP))
@@ -880,7 +894,31 @@ func _build_animation_tree() -> AnimationTree:
 	graph.add_node("throw_seek", AnimationNodeTimeSeek.new())
 	graph.add_node("upper_body", upper_body)
 	graph.connect_node("throw_seek", 0, "throw_clip")
-	graph.connect_node("upper_body", 0, "state")
+	# Holding a torch replaces only the right arm, so the walk or run carries on underneath
+	var carry := AnimationNodeBlend2.new()
+	carry.filter_enabled = true
+	var carry_anim := CARRY_ANIMS.get_animation("torch")
+	for t in carry_anim.get_track_count():
+		var path := carry_anim.track_get_path(t)
+		var bone := String(path).get_slice(":", 1)
+		if CARRY_ARM.any(func(part: String) -> bool: return bone.begins_with(part)):
+			carry.set_filter_path(path, true)
+	# ...and part-steadies the chest. The pose's chest is upright and square; those tracks
+	# match the rest pose, so the export leaves them out and the blend falls back to rest.
+	var carry_chest := AnimationNodeBlend2.new()
+	carry_chest.filter_enabled = true
+	var skeleton_path := String(carry_anim.track_get_path(0)).get_slice(":", 0)
+	for bone: String in CARRY_CHEST:
+		carry_chest.set_filter_path(NodePath(skeleton_path + ":" + bone), true)
+	graph.add_node("carry_clip", _clip(ANIM_CARRY_TORCH))
+	graph.add_node("carry", carry)
+	graph.add_node("carry_chest_clip", _clip(ANIM_CARRY_TORCH))  # A node can't feed two blends
+	graph.add_node("carry_chest", carry_chest)
+	graph.connect_node("carry_chest", 0, "state")
+	graph.connect_node("carry_chest", 1, "carry_chest_clip")
+	graph.connect_node("carry", 0, "carry_chest")
+	graph.connect_node("carry", 1, "carry_clip")
+	graph.connect_node("upper_body", 0, "carry")
 	graph.connect_node("upper_body", 1, "throw_seek")
 	graph.connect_node("output", 0, "upper_body")
 

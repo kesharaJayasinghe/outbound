@@ -11,6 +11,7 @@ blocks of the same names inside `player-swim.blend`. That file lives outside the
 | `swim_clips.py` | SwimTread, SwimCrawl, SwimBreast (breaststroke uses the `sit_clips.py` IK helpers) |
 | `pick_clips.py` | PickUp |
 | `throw_clips.py` | Throw (overhand, upper body) |
+| `carry_clips.py` | CarryTorch (right arm held up, a still pose) |
 
 The scripts load each other by text-block name (`bpy.data.texts["swim_tools.py"]`), so run
 them inside the .blend, not as standalone files.

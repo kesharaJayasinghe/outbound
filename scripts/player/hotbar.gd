@@ -10,8 +10,8 @@ extends Node
 ## that lands near gulls on a beach sends them off (beach_birds.gd). Thrown stones are
 ## small rigid bodies that disappear a few seconds after landing.
 ##
-## A held torch (torch.gd) is carried upright beside the body at the right hand, leaning a
-## little forward. It's put out of sight while swimming or picking something up, and comes
+## A held torch (torch.gd) is held up in the right hand (player.carry_torch raises the arm and
+## keeps it still while walking or running), upright, leaning a little forward. It's put out of sight while swimming or picking something up, and comes
 ## back (lit) afterwards.
 
 const BUILDER = preload("res://scripts/build/builder.gd")
@@ -224,6 +224,7 @@ func _process(delta: float) -> void:
 		var axes := hand.global_basis.orthonormalized()
 		held.global_transform = Transform3D(axes.scaled(Vector3.ONE * STONE_SIZE), hand.global_position + axes * HELD_OFFSET)
 	torch.set_shown(_holding() == &"torch" and not player.swimming and not player.is_picking())
+	player.carry_torch = torch.visible
 	if torch.visible:
 		# Upright in the fist, leaning forward a little, whatever the arm is doing
 		var hand: Node3D = player.hand

@@ -150,8 +150,9 @@ particles, and the river-rush loop pitched down as the roar).
   `REGROW_TIME` when the player is out of sight range. The prompt and toast use the builder's
   HUD. The builder's menu has an Inventory page.
 - `player/torch.gd`: the hand-held torch (crafted: an `item` recipe in recipes.gd goes into the
-  inventory instead of being placed, with `limit` as how many you can carry). hotbar.gd
-  holds it upright at the palm, leaning `TORCH_LEAN` forward along the model's facing (the
+  inventory instead of being placed, with `limit` as how many you can carry). hotbar.gd sets
+  `player.carry_torch`, which raises the right arm (`carry_animations.res`) and holds it
+  upright at the palm, leaning `TORCH_LEAN` forward along the model's facing (the
   `model` child turns, not the body), hidden while swimming or picking up. Flame and embers
   are world-space additive particles; an OmniLight3D with dual-paraboloid shadows (cube
   shadows cost 4-5 ms in the forest, these about 1 ms) whose `light_cull_mask` skips the
@@ -239,7 +240,10 @@ particles, and the river-rush loop pitched down as the roar).
   `idle` loop. Picking up plays `pick_animations.res` (`up`; the right hand reaches `GRAB` in
   `pick_clips.py`, which must match `PICK_REACH`). Throwing (`hotbar.gd` calls `player.throw`)
   overlays `throw_animations.res` on the upper body only (a filtered Blend2 after the state
-  machine), turning to the aim; the stone launches from the hand at `THROW_RELEASE`. All are authored in `player-swim.blend`
+  machine), turning to the aim; the stone launches from the hand at `THROW_RELEASE`. Carrying a torch blends a still
+  right-arm pose (`carry` filter, `CARRY_ARM`) under the throw, plus `CARRY_CHEST_STEADY` of the
+  upright chest (`carry_chest`), so the torch stays high while walking or running. An
+  AnimationNodeAnimation can only feed one blend, so each blend gets its own clip node. All are authored in `player-swim.blend`
   (outside the repo) by the text blocks versioned in `tools/blender/`, and converted with
   `tools/convert_anims.gd`, which maps the root bone between the glb and FBX skeletons and
   checks the result against Idle. The `player-animation` skill has the full
